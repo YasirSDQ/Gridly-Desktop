@@ -1,21 +1,22 @@
 ```
-# Dependencies
-node_modules/
-.jspm/
-.bower-cache/
-
-# Build outputs
-dist/
+# Build artifacts
 build/
-coverage/
-.eslintcache
+.dart_tool/
+*.g.dart
 
-# Environment variables
+# Dependencies
+.pub/
+node_modules/
+
+# Logs
+*.log
+
+# Environment
 .env
 .env.local
-.env.*
+*.env.*
 
-# IDE specific
+# Editor/IDE
 .vscode/
 .idea/
 *.swp
@@ -25,39 +26,4 @@ coverage/
 # OS generated
 .DS_Store
 Thumbs.db
-
-# Logs
-*.log
-
-# Python
-__pycache__/
-*.pyc
-*.pyo
-.Python
-*.so
-.Python
-*.egg-info/
-.eggs/
-
-# Node.js
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# TypeScript
-*.tsbuildinfo
-
-# Dart/Flutter (since pubspec.yaml is present)
-.dart_tool/
-.packages
-.pub/
-build/
-*.g.dart
-*.freezed.dart
-
-# Vite (since vite.config.js is present)
-.vite/
-
-# Rclone related (since rclone scripts are present)
-.rclone/
 ```
