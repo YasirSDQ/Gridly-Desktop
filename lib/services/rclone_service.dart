@@ -99,7 +99,7 @@ class RCloneService {
     if (_isRunning || _rclonePath == null) return;
     
     try {
-      _rcloneProcess = await startProcess(
+      _rcloneProcess = await Process.start(
         _rclonePath!,
         ['rcd', '--rc-addr=:$rcPort', '--rc-user=admin', '--rc-pass=gridly2024'],
         runInShell: true,

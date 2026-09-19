@@ -4,7 +4,7 @@ import 'package:window_manager/window_manager.dart';
 import 'package:bitsdojo_window/bitsdojo_window.dart';
 
 import 'services/rclone_service.dart';
-import 'providers/app_provider.dart';
+import 'models/models.dart';
 import 'screens/main_screen.dart';
 
 void main() async {
@@ -70,7 +70,7 @@ class GridlyDesktopApp extends StatelessWidget {
             error: Color(0xFFEF4444),
           ),
           fontFamily: 'Segoe UI',
-          cardTheme: CardTheme(
+          cardTheme: CardThemeData(
             color: const Color(0xFF1E293B),
             elevation: 0,
             shape: RoundedRectangleBorder(
