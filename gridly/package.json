@@ -1,0 +1,47 @@
+{
+  "name": "sandbox-workspace",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "postinstall": "test -f rclone || (curl -sO https://downloads.rclone.org/rclone-current-linux-amd64.zip && unzip -q rclone-current-linux-amd64.zip && mv rclone-*-linux-amd64/rclone . && chmod +x rclone && rm -rf rclone-*-linux-amd64* rclone-current-linux-amd64.zip)",
+    "dev": "tsx server.ts",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "start": "node dist/server.cjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dnd-kit/core": "^6.1.0",
+    "@dnd-kit/sortable": "^8.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "body-parser": "^2.3.0",
+    "canvas-confetti": "^1.9.3",
+    "cors": "^2.8.6",
+    "date-fns": "^2.30.0",
+    "express": "^5.2.1",
+    "framer-motion": "^11.16.1",
+    "http-proxy-middleware": "^4.2.0",
+    "lucide-react": "^0.294.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.8.0",
+    "recharts": "^2.10.0",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.7",
+    "@types/body-parser": "^1.19.6",
+    "@types/canvas-confetti": "^1.6.4",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.20.3",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@types/uuid": "^9.0.7",
+    "@vitejs/plugin-react": "^4.3.4",
+    "esbuild": "^0.28.2",
+    "tailwindcss": "^4.1.7",
+    "tsx": "^4.23.13",
+    "typescript": "^5.7.0",
+    "vite": "^6.3.5"
+  }
+}
