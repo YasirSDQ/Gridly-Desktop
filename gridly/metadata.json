@@ -1,6 +1,0 @@
-{
-  "name": "Gridly - Advanced Google Drive Manager",
-  "description": "Advanced Google Drive Manager with real OAuth 2.0 authentication, rclone integration, file browser, and server-side transfer and copy/move operations.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
