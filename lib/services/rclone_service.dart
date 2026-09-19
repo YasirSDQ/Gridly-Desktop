@@ -5,7 +5,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import 'package:dio/dio.dart';
 import 'package:archive/archive.dart';
-import 'package:process_run/process_run.dart';
 import 'package:file/file.dart' as fs;
 import 'package:file/local.dart';
 
