@@ -5,7 +5,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import 'package:dio/dio.dart';
 import 'package:archive/archive.dart';
-import 'package:process_run/process_run.dart';
 import 'package:file/file.dart' as fs;
 import 'package:file/local.dart';
 
@@ -99,7 +98,7 @@ class RCloneService {
     if (_isRunning || _rclonePath == null) return;
     
     try {
-      _rcloneProcess = await startProcess(
+      _rcloneProcess = await Process.start(
         _rclonePath!,
         ['rcd', '--rc-addr=:$rcPort', '--rc-user=admin', '--rc-pass=gridly2024'],
         runInShell: true,
@@ -150,12 +149,19 @@ class RCloneService {
   
   // Config operations
   Future<List<Map<String, dynamic>>> listConfigs() async {
-    final result = await _makeRequest('/config/list', {'opt': {'showPass': false}});
-    final configs = result['remotes'] as List? ?? [];
+    final result = await _makeRequest('/config/dump');
     
-    return configs.map((name) {
-      return {'name': name, 'type': 'unknown'};
-    }).toList();
+    final List<Map<String, dynamic>> configs = [];
+    result.forEach((name, data) {
+      if (data is Map) {
+        configs.add({
+          'name': name,
+          'type': data['type'] ?? 'unknown',
+        });
+      }
+    });
+    
+    return configs;
   }
   
   Future<void> createConfig(String name, String type, Map<String, String> params) async {
@@ -180,11 +186,59 @@ class RCloneService {
       await Process.run(_rclonePath!, ['config', 'delete', name], runInShell: true);
     }
   }
+
+  Process? _authorizeProcess;
+  
+  Future<void> generateDriveLoginCode(void Function(String url) onUrlReceived, void Function(String token) onTokenReceived) async {
+    if (_rclonePath == null) throw Exception('RClone not installed');
+    
+    _authorizeProcess?.kill();
+    _authorizeProcess = await Process.start(
+      _rclonePath!,
+      ['authorize', 'drive'],
+      runInShell: true,
+    );
+    
+    final stdoutStream = _authorizeProcess!.stdout.transform(utf8.decoder);
+    final stderrStream = _authorizeProcess!.stderr.transform(utf8.decoder);
+    
+    String output = '';
+    
+    stderrStream.listen((data) {
+      // rclone authorize drive prints the URL to stderr usually
+      final urlMatch = RegExp(r'(http://127\.0\.0\.1:53682/auth\?state=[^\s]+)').firstMatch(data);
+      if (urlMatch != null) {
+        onUrlReceived(urlMatch.group(1)!);
+      }
+    });
+    
+    stdoutStream.listen((data) {
+      output += data;
+      // Extract JSON token using regex
+      final match = RegExp(r'\{.*"access_token".*\}', dotAll: true).firstMatch(output);
+      if (match != null) {
+        final maybeJson = match.group(0)!;
+        try {
+          // Verify it's valid JSON before triggering callback
+          jsonDecode(maybeJson);
+          onTokenReceived(maybeJson);
+          output = ''; // Clear to prevent multiple calls
+        } catch (_) {
+          // Not valid JSON yet
+        }
+      }
+    });
+  }
+  
+  void cancelAuthorize() {
+    _authorizeProcess?.kill();
+    _authorizeProcess = null;
+  }
   
   // File operations
   Future<List<Map<String, dynamic>>> listFiles(String remote, String path) async {
     final result = await _makeRequest('/operations/listfiles', {
-      'fs': remote,
+      'fs': '$remote:',
       'remote': path,
       'recurse': false,
       'showHidden': true,
@@ -203,9 +257,25 @@ class RCloneService {
     }).toList();
   }
   
+  Future<Map<String, dynamic>> getAbout(String remote) async {
+    try {
+      final result = await _makeRequest('/operations/about', {
+        'fs': '$remote:',
+      });
+      return {
+        'total': result['total'] ?? 0,
+        'used': result['used'] ?? 0,
+        'free': result['free'] ?? 0,
+      };
+    } catch (e) {
+      // Some remotes don't support about (e.g. local without right flags, or specific cloud providers)
+      return {'total': 0, 'used': 0, 'free': 0};
+    }
+  }
+
   Future<Map<String, dynamic>> getStats(String remote, String path) async {
     final result = await _makeRequest('/operations/stats', {
-      'fs': remote,
+      'fs': '$remote:',
       'remote': path,
     });
     
@@ -217,59 +287,59 @@ class RCloneService {
   
   Future<void> createFolder(String remote, String path) async {
     await _makeRequest('/operations/mkdir', {
-      'fs': remote,
+      'fs': '$remote:',
       'remote': path,
     });
   }
   
   Future<void> deleteFile(String remote, String path) async {
     await _makeRequest('/operations/deletefile', {
-      'fs': remote,
+      'fs': '$remote:',
       'remote': path,
     });
   }
   
   Future<void> deleteFolder(String remote, String path) async {
     await _makeRequest('/operations/purge', {
-      'fs': remote,
+      'fs': '$remote:',
       'remote': path,
     });
   }
   
   Future<void> rename(String remote, String oldPath, String newPath) async {
     await _makeRequest('/operations/move', {
-      'fs': remote,
-      'remote': oldPath,
-      'dstFs': remote,
+      'srcFs': '$remote:',
+      'srcRemote': oldPath,
+      'dstFs': '$remote:',
       'dstRemote': newPath,
     });
   }
   
   Future<void> copy(String srcRemote, String srcPath, String dstRemote, String dstPath) async {
     await _makeRequest('/operations/copy', {
-      'srcFs': srcRemote,
+      'srcFs': '$srcRemote:',
       'srcRemote': srcPath,
-      'dstFs': dstRemote,
+      'dstFs': '$dstRemote:',
       'dstRemote': dstPath,
     });
   }
   
   Future<void> move(String srcRemote, String srcPath, String dstRemote, String dstPath) async {
     await _makeRequest('/operations/move', {
-      'srcFs': srcRemote,
+      'srcFs': '$srcRemote:',
       'srcRemote': srcPath,
-      'dstFs': dstRemote,
+      'dstFs': '$dstRemote:',
       'dstRemote': dstPath,
     });
   }
   
   Future<String> getDownloadUrl(String remote, String path) async {
-    return 'http://admin:gridly2024@localhost:$rcPort/rc/operations/cat?fs=$remote&remote=${Uri.encodeComponent(path)}';
+    return 'http://admin:gridly2024@localhost:$rcPort/rc/operations/cat?fs=$remote:&remote=${Uri.encodeComponent(path)}';
   }
   
   Future<Map<String, dynamic>> search(String remote, String query) async {
     final result = await _makeRequest('/operations/search', {
-      'fs': remote,
+      'fs': '$remote:',
       'query': query,
     });
     
@@ -283,13 +353,30 @@ class RCloneService {
     required String dstFs,
     required String dstRemote,
     required bool isCopy,
+    bool isFile = true,
   }) async {
-    final jobType = isCopy ? 'copy' : 'move';
-    final result = await _makeRequest('/sync/$jobType', {
-      'srcFs': '$srcFs:$srcRemote',
-      'dstFs': '$dstFs:$dstRemote',
-    });
+    String endpoint;
+    Map<String, dynamic> params;
     
+    if (isFile) {
+      endpoint = isCopy ? '/operations/copyfile' : '/operations/movefile';
+      params = {
+        'srcFs': '$srcFs:',
+        'srcRemote': srcRemote,
+        'dstFs': '$dstFs:',
+        'dstRemote': dstRemote,
+        '_async': true,
+      };
+    } else {
+      endpoint = isCopy ? '/sync/copy' : '/sync/move';
+      params = {
+        'srcFs': '$srcFs:$srcRemote',
+        'dstFs': '$dstFs:$dstRemote',
+        '_async': true,
+      };
+    }
+    
+    final result = await _makeRequest(endpoint, params);
     return result['jobid']?.toString() ?? '0';
   }
   

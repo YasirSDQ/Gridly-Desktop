@@ -3,11 +3,15 @@ import 'package:flutter/foundation.dart';
 class RemoteConfig {
   final String name;
   final String type;
+  final int totalBytes;
+  final int usedBytes;
   final Map<String, dynamic> options;
 
   RemoteConfig({
     required this.name,
     required this.type,
+    this.totalBytes = 0,
+    this.usedBytes = 0,
     this.options = const {},
   });
 
@@ -167,18 +171,74 @@ class AppProvider extends ChangeNotifier {
   List<TransferJob> get activeTransfers => _activeTransfers;
   String get currentRemote => _currentRemote;
   String get currentPath => _currentPath;
+  int get fileCount => _currentFiles.where((f) => !f.isDir).length;
+  int get folderCount => _currentFiles.where((f) => f.isDir).length;
+  
   bool get isLoading => _isLoading;
   String? get error => _error;
   
-  Future<void> loadRemotes() async {
-    // Will be implemented with service
-    notifyListeners();
+  Future<void> loadRemotes(dynamic rcloneService) async {
+    setLoading(true);
+    try {
+      final configs = await rcloneService.listConfigs();
+      final List<RemoteConfig> newRemotes = [];
+      
+      for (final c in configs) {
+        final name = c['name'];
+        final type = c['type'] ?? 'unknown';
+        final about = await rcloneService.getAbout(name);
+        
+        newRemotes.add(RemoteConfig(
+          name: name,
+          type: type,
+          totalBytes: about['total'] ?? 0,
+          usedBytes: about['used'] ?? 0,
+        ));
+      }
+      _remotes = newRemotes;
+      
+      if (_remotes.isNotEmpty) {
+        // Automatically navigate to the first remote
+        await navigateTo(_remotes.first.name, '', rcloneService);
+      } else {
+        setError(null);
+      }
+    } catch (e) {
+      setError(e.toString());
+    } finally {
+      setLoading(false);
+    }
   }
   
-  void navigateTo(String remote, String path) {
+  Future<void> navigateTo(String remote, String path, dynamic rcloneService) async {
     _currentRemote = remote;
     _currentPath = path;
-    notifyListeners();
+    
+    setLoading(true);
+    try {
+      final files = await rcloneService.listFiles(remote, path);
+      _currentFiles = files.map<FileItem>((f) => FileItem(
+        name: f['name'] ?? '',
+        path: f['path'] ?? '',
+        size: f['size'] ?? 0,
+        mimeType: f['mimeType'] ?? '',
+        isDir: f['isDir'] ?? false,
+        modified: f['modified'] != null ? DateTime.tryParse(f['modified']) : null,
+      )).toList();
+      
+      // Sort: Folders first, then alphabetically
+      _currentFiles.sort((a, b) {
+        if (a.isDir && !b.isDir) return -1;
+        if (!a.isDir && b.isDir) return 1;
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      });
+      
+      setError(null);
+    } catch (e) {
+      setError(e.toString());
+    } finally {
+      setLoading(false);
+    }
   }
   
   void setLoading(bool loading) {
