@@ -149,12 +149,19 @@ class RCloneService {
   
   // Config operations
   Future<List<Map<String, dynamic>>> listConfigs() async {
-    final result = await _makeRequest('/config/list', {'opt': {'showPass': false}});
-    final configs = result['remotes'] as List? ?? [];
+    final result = await _makeRequest('/config/dump');
     
-    return configs.map((name) {
-      return {'name': name, 'type': 'unknown'};
-    }).toList();
+    final List<Map<String, dynamic>> configs = [];
+    result.forEach((name, data) {
+      if (data is Map) {
+        configs.add({
+          'name': name,
+          'type': data['type'] ?? 'unknown',
+        });
+      }
+    });
+    
+    return configs;
   }
   
   Future<void> createConfig(String name, String type, Map<String, String> params) async {
@@ -233,7 +240,7 @@ class RCloneService {
   // File operations
   Future<List<Map<String, dynamic>>> listFiles(String remote, String path) async {
     final result = await _makeRequest('/operations/listfiles', {
-      'fs': remote,
+      'fs': '$remote:',
       'remote': path,
       'recurse': false,
       'showHidden': true,
@@ -252,9 +259,25 @@ class RCloneService {
     }).toList();
   }
   
+  Future<Map<String, dynamic>> getAbout(String remote) async {
+    try {
+      final result = await _makeRequest('/operations/about', {
+        'fs': '$remote:',
+      });
+      return {
+        'total': result['total'] ?? 0,
+        'used': result['used'] ?? 0,
+        'free': result['free'] ?? 0,
+      };
+    } catch (e) {
+      // Some remotes don't support about (e.g. local without right flags, or specific cloud providers)
+      return {'total': 0, 'used': 0, 'free': 0};
+    }
+  }
+
   Future<Map<String, dynamic>> getStats(String remote, String path) async {
     final result = await _makeRequest('/operations/stats', {
-      'fs': remote,
+      'fs': '$remote:',
       'remote': path,
     });
     
@@ -266,59 +289,59 @@ class RCloneService {
   
   Future<void> createFolder(String remote, String path) async {
     await _makeRequest('/operations/mkdir', {
-      'fs': remote,
+      'fs': '$remote:',
       'remote': path,
     });
   }
   
   Future<void> deleteFile(String remote, String path) async {
     await _makeRequest('/operations/deletefile', {
-      'fs': remote,
+      'fs': '$remote:',
       'remote': path,
     });
   }
   
   Future<void> deleteFolder(String remote, String path) async {
     await _makeRequest('/operations/purge', {
-      'fs': remote,
+      'fs': '$remote:',
       'remote': path,
     });
   }
   
   Future<void> rename(String remote, String oldPath, String newPath) async {
     await _makeRequest('/operations/move', {
-      'fs': remote,
-      'remote': oldPath,
-      'dstFs': remote,
+      'srcFs': '$remote:',
+      'srcRemote': oldPath,
+      'dstFs': '$remote:',
       'dstRemote': newPath,
     });
   }
   
   Future<void> copy(String srcRemote, String srcPath, String dstRemote, String dstPath) async {
     await _makeRequest('/operations/copy', {
-      'srcFs': srcRemote,
+      'srcFs': '$srcRemote:',
       'srcRemote': srcPath,
-      'dstFs': dstRemote,
+      'dstFs': '$dstRemote:',
       'dstRemote': dstPath,
     });
   }
   
   Future<void> move(String srcRemote, String srcPath, String dstRemote, String dstPath) async {
     await _makeRequest('/operations/move', {
-      'srcFs': srcRemote,
+      'srcFs': '$srcRemote:',
       'srcRemote': srcPath,
-      'dstFs': dstRemote,
+      'dstFs': '$dstRemote:',
       'dstRemote': dstPath,
     });
   }
   
   Future<String> getDownloadUrl(String remote, String path) async {
-    return 'http://admin:gridly2024@localhost:$rcPort/rc/operations/cat?fs=$remote&remote=${Uri.encodeComponent(path)}';
+    return 'http://admin:gridly2024@localhost:$rcPort/rc/operations/cat?fs=$remote:&remote=${Uri.encodeComponent(path)}';
   }
   
   Future<Map<String, dynamic>> search(String remote, String query) async {
     final result = await _makeRequest('/operations/search', {
-      'fs': remote,
+      'fs': '$remote:',
       'query': query,
     });
     
