@@ -82,10 +82,17 @@ class _AuthModalState extends State<AuthModal> {
         try {
           await http.get(Uri.parse(codeValue)).timeout(const Duration(seconds: 5));
         } catch (e) {
-          // It might throw because rclone closes the connection immediately,
-          // but rclone should still receive the code and print the token.
+          // It might throw because rclone closes the connection immediately
         }
-        // The token will be handled by the onTokenReceived callback in generateDriveLoginCode
+        
+        // If we don't get a response (modal doesn't close) in 3 seconds, reset the button
+        await Future.delayed(const Duration(seconds: 3));
+        if (mounted) {
+          setState(() => _loadingSubmit = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Auth process did not return a token. Please click "GENERATE" again.'), backgroundColor: Colors.red),
+          );
+        }
       } else {
         throw Exception('Invalid input. Please paste the callback URL or JSON token.');
       }
