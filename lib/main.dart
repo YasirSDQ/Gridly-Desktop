@@ -61,25 +61,6 @@ class GridlyDesktopApp extends StatelessWidget {
         theme: ThemeData(
           useMaterial3: true,
           brightness: Brightness.dark,
-gridly-desktop-with-rclone-integration-5dfd5
-          primaryColor: const Color(0xFF6366F1),
-          scaffoldBackgroundColor: const Color(0xFF0A0A0A),
-          colorScheme: const ColorScheme.dark(
-            primary: Color(0xFF6366F1),
-            secondary: Color(0xFF8B5CF6),
-            tertiary: Color(0xFF06B6D4),
-            surface: Color(0xFF0F172A),
-            background: Color(0xFF0A0A0A),
-            error: Color(0xFFEF4444),
-          ),
-          fontFamily: 'Inter',
-          cardTheme: CardTheme(
-            color: const Color(0xFF0F172A).withOpacity(0.6),
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: Colors.white.withOpacity(0.05)),
-=======
           primaryColor: const Color(0xFF6366F1), // primary
           scaffoldBackgroundColor: const Color(0xFF0F172A),
           colorScheme: const ColorScheme.dark(
@@ -94,7 +75,7 @@ gridly-desktop-with-rclone-integration-5dfd5
             bodyColor: Colors.white,
             displayColor: Colors.white,
           ),
-          cardTheme: CardThemeData(
+          cardTheme: CardTheme(
             color: const Color(0xFF1E293B).withOpacity(0.4),
             elevation: 0,
             shape: RoundedRectangleBorder(
@@ -102,7 +83,6 @@ gridly-desktop-with-rclone-integration-5dfd5
               side: BorderSide(
                 color: const Color(0xFF6366F1).withOpacity(0.15),
               ),
-main
             ),
           ),
           appBarTheme: const AppBarTheme(
@@ -111,17 +91,10 @@ main
           ),
           inputDecorationTheme: InputDecorationTheme(
             filled: true,
- gridly-desktop-with-rclone-integration-5dfd5
-            fillColor: Colors.white.withOpacity(0.05),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(999),
-              borderSide: BorderSide.none,
-=======
             fillColor: const Color(0xFF1E293B).withOpacity(0.6),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
-main
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(999),
