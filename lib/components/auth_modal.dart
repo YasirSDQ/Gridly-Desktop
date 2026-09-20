@@ -314,8 +314,10 @@ class _AuthModalState extends State<AuthModal> {
                           ? const SizedBox(width: 16, height: 16,
                               child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                           : const Icon(Icons.code, size: 18),
-                      label: Text(_loadingCode ? 'WAITING FOR RCLONE...' : 'GENERATE LOGIN CODE',
-                          style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                      label: Text(
+                        _statusMessage ?? (_loadingCode ? 'WAITING FOR RCLONE...' : 'GENERATE LOGIN CODE'),
+                        style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.3, fontSize: 13),
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFE11D48),
                         foregroundColor: Colors.white,

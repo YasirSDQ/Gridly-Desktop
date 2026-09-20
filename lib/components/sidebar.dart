@@ -174,15 +174,19 @@ class Sidebar extends StatelessWidget {
                                     ],
                                   ),
                                 ),
-                                if (isActive)
-                                  Container(
-                                    width: 6,
-                                    height: 6,
-                                    decoration: const BoxDecoration(
-                                      color: Color(0xFF6366F1),
-                                      shape: BoxShape.circle,
+                                // Remove button
+                                InkWell(
+                                  onTap: () => _confirmRemoveAccount(context, provider, remote.name),
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(4),
+                                    child: Icon(
+                                      Icons.link_off,
+                                      size: 14,
+                                      color: Colors.white.withOpacity(0.25),
                                     ),
                                   ),
+                                ),
                               ],
                             ),
                           ),
