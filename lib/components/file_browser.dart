@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../models/models.dart';
 import '../services/rclone_service.dart';
+import 'transfer_modal.dart';
 
 class FileBrowser extends StatefulWidget {
   const FileBrowser({super.key});
@@ -456,28 +457,68 @@ class _FileCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Icon area
+              // Icon area with top-right menu
               Expanded(
-                child: Center(
-                  child: Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      gradient: file.isDir
-                          ? const LinearGradient(
-                              colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-                            )
-                          : const LinearGradient(
-                              colors: [Color(0xFF3B82F6), Color(0xFF06B6D4)],
+                child: Stack(
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          gradient: file.isDir
+                              ? const LinearGradient(colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)])
+                              : const LinearGradient(colors: [Color(0xFF3B82F6), Color(0xFF06B6D4)]),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          file.isDir ? Icons.folder : Icons.insert_drive_file,
+                          color: Colors.white,
+                          size: 32,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: PopupMenuButton<String>(
+                        icon: Icon(
+                          Icons.more_vert,
+                          color: Colors.white.withOpacity(0.5),
+                          size: 20,
+                        ),
+                        onSelected: (value) {
+                          if (value == 'copy' || value == 'move') {
+                            final provider = context.read<AppProvider>();
+                            showDialog(
+                              context: context,
+                              builder: (context) => TransferModal(
+                                preSelectedSource: file,
+                                sourceRemote: provider.currentRemote,
+                              ),
+                            );
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(value: 'open', child: Text('Open')),
+                          const PopupMenuItem(value: 'download', child: Text('Download')),
+                          const PopupMenuItem(value: 'rename', child: Text('Rename')),
+                          const PopupMenuItem(value: 'move', child: Text('Move')),
+                          const PopupMenuItem(value: 'copy', child: Text('Copy')),
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete, size: 18, color: Colors.red),
+                                SizedBox(width: 8),
+                                Text('Delete', style: TextStyle(color: Colors.red)),
+                              ],
                             ),
-                      borderRadius: BorderRadius.circular(12),
+                          ),
+                        ],
+                      ),
                     ),
-                    child: Icon(
-                      file.isDir ? Icons.folder : Icons.insert_drive_file,
-                      color: Colors.white,
-                      size: 32,
-                    ),
-                  ),
+                  ],
                 ),
               ),
               
@@ -620,7 +661,16 @@ class _FileListItem extends StatelessWidget {
               size: 20,
             ),
             onSelected: (value) {
-              // Handle actions
+              if (value == 'copy' || value == 'move') {
+                final provider = context.read<AppProvider>();
+                showDialog(
+                  context: context,
+                  builder: (context) => TransferModal(
+                    preSelectedSource: file,
+                    sourceRemote: provider.currentRemote,
+                  ),
+                );
+              }
             },
             itemBuilder: (context) => [
               const PopupMenuItem(value: 'open', child: Text('Open')),
