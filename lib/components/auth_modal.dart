@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/rclone_service.dart';
@@ -16,16 +15,16 @@ class AuthModal extends StatefulWidget {
   State<AuthModal> createState() => _AuthModalState();
 }
 
-class _AuthModalState extends State<AuthModal> {
+enum AuthState { input, loading, success, error }
+
+class _AuthModalState extends State<AuthModal> with SingleTickerProviderStateMixin {
   final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _codeController = TextEditingController();
   late final RCloneService _rcloneService;
 
-  bool _loadingCode = false;
-  bool _loadingSubmit = false;
-  String? _authUrl; // the URL to show the user
-
-  String? _statusMessage;
+  AuthState _state = AuthState.input;
+  String _statusMessage = '';
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
 
   @override
   void didChangeDependencies() {
@@ -34,25 +33,35 @@ class _AuthModalState extends State<AuthModal> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
+    
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
   void dispose() {
     _nameController.dispose();
-    _codeController.dispose();
+    _pulseController.dispose();
     _rcloneService.cancelAuthorize();
     super.dispose();
   }
 
-  // Open URL — use cmd /c start on Windows (most reliable)
   Future<void> _openUrl(String url) async {
     if (Platform.isWindows) {
       try {
-        // "start" requires an empty first arg as window title when URL has special chars
         await Process.run('cmd', ['/c', 'start', '', url], runInShell: false);
         return;
       } catch (e) {
         print('[AUTH] cmd start failed: $e');
       }
     }
-    // Fallback: url_launcher
     try {
       final uri = Uri.parse(url);
       await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -61,19 +70,18 @@ class _AuthModalState extends State<AuthModal> {
     }
   }
 
-  Future<void> _handleGenerateCode() async {
+  Future<void> _handleConnect() async {
     final remoteName = _nameController.text.trim();
     if (remoteName.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a Remote Name first.'), backgroundColor: Colors.orange),
+        const SnackBar(content: Text('Please enter a name for this drive.'), backgroundColor: Colors.orange),
       );
       return;
     }
 
     setState(() {
-      _loadingCode = true;
-      _authUrl = null;
-      _statusMessage = 'Starting rclone authorize...';
+      _state = AuthState.loading;
+      _statusMessage = 'Initiating secure connection...';
     });
 
     try {
@@ -81,9 +89,7 @@ class _AuthModalState extends State<AuthModal> {
         (url) async {
           if (mounted) {
             setState(() {
-              _authUrl = url;
-              _loadingCode = false;
-              _statusMessage = null;
+              _statusMessage = 'Waiting for browser authorization...';
             });
           }
           await _openUrl(url);
@@ -93,90 +99,24 @@ class _AuthModalState extends State<AuthModal> {
         },
       );
 
-      // 30-second safety timeout — resets if URL never arrives
-      for (int i = 0; i < 30; i++) {
+      // Wait for callback up to 120 seconds
+      for (int i = 0; i < 120; i++) {
         await Future.delayed(const Duration(seconds: 1));
-        if (!mounted || !_loadingCode) return;
-        if (mounted) setState(() => _statusMessage = 'Waiting for rclone URL... (${30 - i}s)');
+        if (!mounted || _state != AuthState.loading) return;
       }
 
-      if (mounted && _loadingCode) {
+      if (mounted && _state == AuthState.loading) {
         setState(() {
-          _loadingCode = false;
-          _statusMessage = null;
+          _state = AuthState.error;
+          _statusMessage = 'Connection timed out. Please try again.';
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Timed out. Make sure rclone is installed and try again.'),
-            backgroundColor: Colors.orange,
-          ),
-        );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-        setState(() { _loadingCode = false; _statusMessage = null; });
-      }
-    }
-  }
-
-  Future<void> _handleSubmitUrl() async {
-    final codeValue = _codeController.text.trim();
-    final remoteName = _nameController.text.trim();
-
-    if (remoteName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a Remote Name.'), backgroundColor: Colors.orange),
-      );
-      return;
-    }
-    if (codeValue.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please paste the callback URL or JSON token.'), backgroundColor: Colors.orange),
-      );
-      return;
-    }
-
-    setState(() => _loadingSubmit = true);
-
-    try {
-      if (codeValue.startsWith('{')) {
-        // Direct JSON token
-        await _createConfigWithToken(codeValue);
-      } else if (codeValue.startsWith('http://127.0.0.1') || codeValue.startsWith('http://localhost')) {
-        // Callback URL — hit it so rclone captures the auth code
-        try {
-          await http.get(Uri.parse(codeValue)).timeout(const Duration(seconds: 10));
-        } catch (_) {
-          // Expected: rclone closes the connection immediately
-        }
-
-        // Wait up to 10s for the token callback to fire
-        for (int i = 0; i < 10; i++) {
-          await Future.delayed(const Duration(seconds: 1));
-          if (!mounted || !_loadingSubmit) return; // token came in and closed modal
-        }
-
-        if (mounted) {
-          setState(() => _loadingSubmit = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Did not receive token. Try clicking Generate again.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      } else {
-        throw Exception('Invalid input. Paste the callback URL (http://127.0.0.1:...) or JSON token.');
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
-        );
-        setState(() => _loadingSubmit = false);
+        setState(() {
+          _state = AuthState.error;
+          _statusMessage = e.toString();
+        });
       }
     }
   }
@@ -184,20 +124,22 @@ class _AuthModalState extends State<AuthModal> {
   Future<void> _createConfigWithToken(String tokenStr) async {
     final remoteName = _nameController.text.trim();
     if (remoteName.isEmpty) return;
+    
+    setState(() {
+      _statusMessage = 'Finalizing configuration...';
+    });
 
     try {
-      // Try RC API first (daemon picks it up immediately)
       bool apiSuccess = false;
       try {
         await _rcloneService.createConfigViaApi(remoteName, 'drive', {
           'scope': 'drive',
           'token': tokenStr,
-          'config_is_local': 'false', // Prevent rclone from spinning up an auth server!
+          'config_is_local': 'false',
         });
         apiSuccess = true;
       } catch (e) {}
 
-      // Fall back to subprocess + reload
       if (!apiSuccess) {
         await _rcloneService.createConfig(remoteName, 'drive', {
           'scope': 'drive',
@@ -210,21 +152,23 @@ class _AuthModalState extends State<AuthModal> {
         final provider = context.read<AppProvider>();
         await provider.loadRemotes(_rcloneService);
         if (mounted) {
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('✅ Connected "$remoteName" successfully!'),
-              backgroundColor: const Color(0xFF10B981),
-            ),
-          );
+          setState(() {
+            _state = AuthState.success;
+            _statusMessage = 'Connected Successfully!';
+          });
+          
+          await Future.delayed(const Duration(seconds: 2));
+          if (mounted) {
+            Navigator.pop(context);
+          }
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error adding account: $e'), backgroundColor: Colors.red),
-        );
-        setState(() => _loadingSubmit = false);
+        setState(() {
+          _state = AuthState.error;
+          _statusMessage = 'Error saving config: $e';
+        });
       }
     }
   }
@@ -235,19 +179,17 @@ class _AuthModalState extends State<AuthModal> {
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
       child: Container(
-        width: 520,
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.85,
-        ),
+        width: 480,
         decoration: BoxDecoration(
-          color: const Color(0xFF0F172A),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withOpacity(0.1)),
+          color: const Color(0xFF0F172A).withOpacity(0.95),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white.withOpacity(0.08)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.5),
-              blurRadius: 30,
-              offset: const Offset(0, 15),
+              color: const Color(0xFF6366F1).withOpacity(0.15),
+              blurRadius: 60,
+              spreadRadius: -10,
+              offset: const Offset(0, 20),
             ),
           ],
         ),
@@ -255,164 +197,65 @@ class _AuthModalState extends State<AuthModal> {
           mainAxisSize: MainAxisSize.min,
           children: [
             // Header
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.08))),
-              ),
+            Padding(
+              padding: const EdgeInsets.only(left: 32, right: 24, top: 24, bottom: 16),
               child: Row(
                 children: [
                   Container(
-                    width: 40,
-                    height: 40,
+                    padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF6366F1).withOpacity(0.2),
+                      gradient: LinearGradient(
+                        colors: [
+                          const Color(0xFF6366F1).withOpacity(0.2),
+                          const Color(0xFF8B5CF6).withOpacity(0.2),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.3)),
-                      borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.add_to_drive, color: Color(0xFF818CF8), size: 22),
+                    child: const Icon(Icons.cloud_sync, color: Color(0xFFA5B4FC), size: 24),
                   ),
-                  const SizedBox(width: 14),
+                  const SizedBox(width: 16),
                   const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Connect Google Drive',
-                            style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
-                        Text('Headless auth via rclone',
-                            style: TextStyle(color: Colors.white38, fontSize: 12)),
-                      ],
+                    child: Text(
+                      'Connect Drive',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.5,
+                      ),
                     ),
                   ),
                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close, color: Colors.white38, size: 18),
+                    icon: const Icon(Icons.close, color: Colors.white38),
+                    splashRadius: 20,
                   ),
                 ],
               ),
             ),
+            
+            Divider(color: Colors.white.withOpacity(0.05), height: 1),
 
-            // Scrollable body
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(22),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Step 1: Remote Name
-                    _SectionLabel(label: 'STEP 1 — NAME YOUR ACCOUNT'),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _nameController,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: _inputDecoration('e.g.  mydrive'),
+            // Body
+            Padding(
+              padding: const EdgeInsets.all(32),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 400),
+                transitionBuilder: (child, animation) {
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0, 0.05),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: child,
                     ),
-
-                    const SizedBox(height: 20),
-
-                    // Step 2: Generate
-                    _SectionLabel(label: 'STEP 2 — GENERATE LOGIN URL'),
-                    const SizedBox(height: 8),
-                    ElevatedButton.icon(
-                      onPressed: _loadingCode ? null : _handleGenerateCode,
-                      icon: _loadingCode
-                          ? const SizedBox(width: 16, height: 16,
-                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                          : const Icon(Icons.code, size: 18),
-                      label: Text(
-                        _statusMessage ?? (_loadingCode ? 'WAITING FOR RCLONE...' : 'GENERATE LOGIN CODE'),
-                        style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.3, fontSize: 13),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFE11D48),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                    ),
-
-                    // Show the auth URL if we have it
-                    if (_authUrl != null) ...[
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1E3A5F),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.4)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.link, color: Color(0xFF60A5FA), size: 16),
-                                const SizedBox(width: 8),
-                                const Text('Auth URL (opened in browser)',
-                                    style: TextStyle(color: Color(0xFF60A5FA), fontSize: 12, fontWeight: FontWeight.w600)),
-                                const Spacer(),
-                                GestureDetector(
-                                  onTap: () {
-                                    Clipboard.setData(ClipboardData(text: _authUrl!));
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('URL copied!')),
-                                    );
-                                  },
-                                  child: const Icon(Icons.copy, color: Color(0xFF60A5FA), size: 16),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Text(_authUrl!,
-                                style: const TextStyle(color: Colors.white54, fontSize: 11),
-                                overflow: TextOverflow.ellipsis),
-                            const SizedBox(height: 8),
-                            GestureDetector(
-                              onTap: () => _openUrl(_authUrl!),
-                              child: const Text('Click here to open manually →',
-                                  style: TextStyle(color: Color(0xFF818CF8), fontSize: 12,
-                                      decoration: TextDecoration.underline)),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-
-                    const SizedBox(height: 20),
-                    Divider(color: Colors.white.withOpacity(0.07)),
-                    const SizedBox(height: 14),
-
-                    // Step 3: Paste callback URL
-                    _SectionLabel(label: 'STEP 3 — PASTE CALLBACK URL'),
-                    const SizedBox(height: 6),
-                    Text(
-                      'After approving in the browser, you\'ll be redirected to a 127.0.0.1 URL. Copy the full URL from the address bar and paste it below.',
-                      style: TextStyle(color: Colors.white.withOpacity(0.45), fontSize: 12, height: 1.5),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _codeController,
-                      style: const TextStyle(color: Colors.white, fontSize: 13),
-                      decoration: _inputDecoration('http://127.0.0.1:53682/?code=...&state=...'),
-                    ),
-                    const SizedBox(height: 10),
-                    ElevatedButton(
-                      onPressed: _loadingSubmit ? null : _handleSubmitUrl,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF6366F1),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      child: Text(
-                        _loadingSubmit ? 'CONNECTING...' : 'SUBMIT & CONNECT',
-                        style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
-                      ),
-                    ),
-                  ],
-                ),
+                  );
+                },
+                child: _buildStateContent(),
               ),
             ),
           ],
@@ -421,43 +264,203 @@ class _AuthModalState extends State<AuthModal> {
     );
   }
 
-  InputDecoration _inputDecoration(String hint) {
-    return InputDecoration(
-      hintText: hint,
-      hintStyle: const TextStyle(color: Colors.white24, fontSize: 13),
-      filled: true,
-      fillColor: const Color(0xFF1E293B),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: Colors.white.withOpacity(0.12)),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Color(0xFF6366F1), width: 1.5),
-      ),
+  Widget _buildStateContent() {
+    switch (_state) {
+      case AuthState.input:
+        return _buildInputState();
+      case AuthState.loading:
+        return _buildLoadingState();
+      case AuthState.success:
+        return _buildSuccessState();
+      case AuthState.error:
+        return _buildErrorState();
+    }
+  }
+
+  Widget _buildInputState() {
+    return Column(
+      key: const ValueKey('input'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text(
+          'Choose a memorable name for this drive connection. You will be redirected to your browser to authorize access securely.',
+          style: TextStyle(color: Colors.white54, fontSize: 14, height: 1.5),
+        ),
+        const SizedBox(height: 24),
+        Container(
+          decoration: BoxDecoration(
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: TextField(
+            controller: _nameController,
+            style: const TextStyle(color: Colors.white, fontSize: 15),
+            decoration: InputDecoration(
+              hintText: 'e.g. MyPersonalDrive',
+              hintStyle: const TextStyle(color: Colors.white24),
+              filled: true,
+              fillColor: const Color(0xFF1E293B),
+              prefixIcon: const Icon(Icons.drive_file_rename_outline, color: Colors.white38, size: 20),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFF6366F1), width: 1.5),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 32),
+        ElevatedButton(
+          onPressed: _handleConnect,
+          style: ElevatedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 18),
+            backgroundColor: const Color(0xFF6366F1),
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          child: const Text(
+            'Connect Google Drive',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ),
+      ],
     );
   }
-}
 
-class _SectionLabel extends StatelessWidget {
-  final String label;
-  const _SectionLabel({required this.label});
+  Widget _buildLoadingState() {
+    return Column(
+      key: const ValueKey('loading'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 20),
+        ScaleTransition(
+          scale: _pulseAnimation,
+          child: Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xFF6366F1).withOpacity(0.1),
+              border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.3), width: 2),
+            ),
+            child: const Center(
+              child: SizedBox(
+                width: 30,
+                height: 30,
+                child: CircularProgressIndicator(
+                  color: Color(0xFF818CF8),
+                  strokeWidth: 3,
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 32),
+        Text(
+          _statusMessage,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'Please complete the authorization in the browser window that just opened.',
+          style: TextStyle(
+            color: Colors.white38,
+            fontSize: 13,
+            height: 1.5,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: TextStyle(
-        color: Colors.white.withOpacity(0.35),
-        fontSize: 10,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 1.2,
-      ),
+  Widget _buildSuccessState() {
+    return Column(
+      key: const ValueKey('success'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 20),
+        Container(
+          width: 80,
+          height: 80,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFF10B981).withOpacity(0.1),
+            border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3), width: 2),
+          ),
+          child: const Icon(
+            Icons.check_rounded,
+            color: Color(0xFF34D399),
+            size: 40,
+          ),
+        ),
+        const SizedBox(height: 32),
+        Text(
+          _statusMessage,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 32),
+      ],
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Column(
+      key: const ValueKey('error'),
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Icon(Icons.error_outline, color: Color(0xFFEF4444), size: 60),
+        const SizedBox(height: 24),
+        const Text(
+          'Authentication Failed',
+          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 12),
+        Text(
+          _statusMessage,
+          style: const TextStyle(color: Colors.redAccent, fontSize: 13),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 32),
+        OutlinedButton(
+          onPressed: () => setState(() => _state = AuthState.input),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            foregroundColor: Colors.white,
+            side: BorderSide(color: Colors.white.withOpacity(0.2)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          child: const Text('Try Again'),
+        ),
+      ],
     );
   }
 }
