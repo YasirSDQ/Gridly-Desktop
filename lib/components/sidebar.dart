@@ -165,10 +165,10 @@ class Sidebar extends StatelessWidget {
                               child: InkWell(
                                 onTap: () {
                                   final rcloneService = context.read<RCloneService>();
-                                  provider.navigateTo(remote.name, '', rcloneService);
+                                  provider.navigateTo(activeAccount.name, '', rcloneService);
                                 },
                                 child: Text(
-                                  remote.name,
+                                  activeAccount.name,
                                   style: const TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
