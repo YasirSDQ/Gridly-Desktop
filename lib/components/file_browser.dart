@@ -35,6 +35,16 @@ class _FileBrowserState extends State<FileBrowser> {
 
             // Search and filter bar
             _buildFilterBar(provider),
+            
+            // Loading progress bar
+            if (provider.isLoading)
+              const LinearProgressIndicator(
+                backgroundColor: Colors.transparent,
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF6366F1)),
+                minHeight: 2,
+              )
+            else
+              const SizedBox(height: 2),
 
             // File grid/list
             Expanded(
