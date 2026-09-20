@@ -366,9 +366,21 @@ class AppProvider extends ChangeNotifier {
       _isSharedWithMe = shared;
     }
     
-    // If we're navigating to a DIFFERENT path or mode, clear the files so we see a loading indicator
+    // If we're navigating to a DIFFERENT path or mode, try to load cache immediately for instant UI update
     if (_currentRemote != remote || _currentPath != path) {
        _currentFiles = [];
+       if (_cacheEnabled) {
+         try {
+           final prefs = await SharedPreferences.getInstance();
+           final filesStr = prefs.getString('cached_files_${remote}_$path');
+           if (filesStr != null) {
+             final List decoded = jsonDecode(filesStr);
+             _currentFiles = decoded.map((e) => FileItem.fromJson(e)).toList();
+           }
+         } catch (e) {
+           print('Error loading cache for navigation: $e');
+         }
+       }
     }
     _currentRemote = remote;
     _currentPath = path;
