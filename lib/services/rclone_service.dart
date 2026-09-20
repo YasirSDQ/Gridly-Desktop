@@ -32,64 +32,75 @@ class RCloneService {
   }
   
   Future<void> _installRClone() async {
+    // 1. Check project-local rclone directory first (bundled with the app)
+    final localRclone = Platform.isWindows
+        ? r'd:\Data\Softwares\Programs\Project Tools Scripts\Projects\Desktop App\Gridly-Desktop\rclone\rclone.exe'
+        : '';
+    if (Platform.isWindows && await _fs.file(localRclone).exists()) {
+      _rclonePath = localRclone;
+      print('Using local rclone: $_rclonePath');
+      return;
+    }
+
+    // 2. Check if rclone is on PATH
+    try {
+      final whichResult = await Process.run('where', ['rclone'], runInShell: true);
+      if (whichResult.exitCode == 0) {
+        final found = whichResult.stdout.toString().trim().split('\n').first.trim();
+        if (found.isNotEmpty) {
+          _rclonePath = found;
+          print('Using system rclone: $_rclonePath');
+          return;
+        }
+      }
+    } catch (_) {}
+
+    // 3. Check AppData install
     final appDir = await getApplicationSupportDirectory();
     final rcloneDir = Directory(path.join(appDir.path, 'rclone'));
-    
     if (!await rcloneDir.exists()) {
       await rcloneDir.create(recursive: true);
     }
-    
-    final exePath = Platform.isWindows 
+    final exePath = Platform.isWindows
         ? path.join(rcloneDir.path, 'rclone.exe')
         : path.join(rcloneDir.path, 'rclone');
-    
     if (await _fs.file(exePath).exists()) {
       _rclonePath = exePath;
+      print('Using AppData rclone: $_rclonePath');
       return;
     }
-    
-    // Download rclone
+
+    // 4. Download rclone
     final os = Platform.isWindows ? 'windows' : (Platform.isMacOS ? 'osx' : 'linux');
     final arch = Platform.isWindows ? 'amd64' : (Platform.isMacOS ? 'arm64' : 'amd64');
     final zipName = 'rclone-$rcloneVersion-$os-$arch.zip';
     final downloadUrl = 'https://github.com/rclone/rclone/releases/download/$rcloneVersion/$zipName';
-    
     final tempDir = await getTemporaryDirectory();
     final zipPath = path.join(tempDir.path, zipName);
     final zipFile = _fs.file(zipPath);
-    
     try {
       await _dio.download(downloadUrl, zipPath, onReceiveProgress: (received, total) {
         if (total != -1) {
-          final progress = (received / total * 100).toStringAsFixed(1);
-          print('Downloading rclone: $progress%');
+          print('Downloading rclone: ${(received / total * 100).toStringAsFixed(1)}%');
         }
       });
-      
-      // Extract
       final bytes = await zipFile.readAsBytes();
       final archive = ZipDecoder().decodeBytes(bytes);
-      
       for (final file in archive) {
-        final filename = file.name;
         if (file.isFile) {
           final data = file.content as List<int>;
-          final extractedPath = path.join(rcloneDir.path, path.basename(filename));
+          final extractedPath = path.join(rcloneDir.path, path.basename(file.name));
           await _fs.file(extractedPath).writeAsBytes(data);
-          
           if (extractedPath.endsWith(Platform.isWindows ? 'rclone.exe' : 'rclone')) {
             _rclonePath = extractedPath;
-            if (!Platform.isWindows) {
-              await Process.run('chmod', ['+x', extractedPath]);
-            }
+            if (!Platform.isWindows) await Process.run('chmod', ['+x', extractedPath]);
           }
         }
       }
-      
       await zipFile.delete();
-      print('RClone installed at: $_rclonePath');
+      print('RClone downloaded to: $_rclonePath');
     } catch (e) {
-      print('Error installing rclone: $e');
+      print('Error downloading rclone: $e');
       rethrow;
     }
   }
@@ -208,48 +219,48 @@ class RCloneService {
     void Function(String url) onUrlReceived,
     void Function(String token) onTokenReceived,
   ) async {
-    if (_rclonePath == null) throw Exception('RClone not installed');
+    if (_rclonePath == null) throw Exception('RClone not found. Path: $_rclonePath');
 
     _authorizeProcess?.kill();
     _urlAlreadySent = false;
     _onTokenCallback = onTokenReceived;
 
+    print('[AUTH] Starting rclone authorize at: $_rclonePath');
+
     _authorizeProcess = await Process.start(
       _rclonePath!,
       ['authorize', 'drive'],
-      runInShell: false, // direct pipe, not through cmd.exe shell buffering
+      runInShell: true, // keep consistent with daemon — shell handles PATH & pipes correctly
     );
 
     final stdoutStream = _authorizeProcess!.stdout.transform(utf8.decoder);
     final stderrStream = _authorizeProcess!.stderr.transform(utf8.decoder);
 
     String accumulated = '';
-
-    // Match the auth URL on any port (rclone may use different ports)
-    final urlRegex = RegExp(r'http://127\.0\.0\.1:\d+/auth[?\w%=&+._-]*');
-    // Match full JSON token block
-    final tokenStartRegex = RegExp(r'Paste the following');
+    final urlRegex = RegExp(r'http://127\.0\.0\.1:\d+/auth\?[^\s"<]+');
     final tokenJsonRegex = RegExp(r'\{[^{}]*"access_token"[^{}]*\}', dotAll: true);
 
     void processChunk(String chunk) {
+      print('[AUTH OUTPUT] $chunk');
       accumulated += chunk;
 
-      // Extract URL
       if (!_urlAlreadySent) {
         final urlMatch = urlRegex.firstMatch(accumulated);
         if (urlMatch != null) {
           _urlAlreadySent = true;
-          onUrlReceived(urlMatch.group(0)!);
+          final url = urlMatch.group(0)!.trimRight();
+          print('[AUTH] URL found: $url');
+          onUrlReceived(url);
         }
       }
 
-      // Extract token JSON
-      if (tokenStartRegex.hasMatch(accumulated) || accumulated.contains('access_token')) {
+      if (accumulated.contains('access_token')) {
         final tokenMatch = tokenJsonRegex.firstMatch(accumulated);
         if (tokenMatch != null) {
           final maybeJson = tokenMatch.group(0)!;
           try {
-            jsonDecode(maybeJson); // validate
+            jsonDecode(maybeJson);
+            print('[AUTH] Token found!');
             _onTokenCallback?.call(maybeJson);
             _onTokenCallback = null;
             accumulated = '';
@@ -258,8 +269,8 @@ class RCloneService {
       }
     }
 
-    stderrStream.listen(processChunk);
-    stdoutStream.listen(processChunk);
+    stderrStream.listen(processChunk, onError: (e) => print('[AUTH STDERR ERR] $e'));
+    stdoutStream.listen(processChunk, onError: (e) => print('[AUTH STDOUT ERR] $e'));
   }
   
   void cancelAuthorize() {

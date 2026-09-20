@@ -41,18 +41,23 @@ class _AuthModalState extends State<AuthModal> {
     super.dispose();
   }
 
-  // Open URL: try url_launcher first, fall back to Windows start command
+  // Open URL — use cmd /c start on Windows (most reliable)
   Future<void> _openUrl(String url) async {
-    final uri = Uri.parse(url);
-    bool launched = false;
-    try {
-      launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {}
-
-    if (!launched && Platform.isWindows) {
+    if (Platform.isWindows) {
       try {
+        // "start" requires an empty first arg as window title when URL has special chars
         await Process.run('cmd', ['/c', 'start', '', url], runInShell: false);
-      } catch (_) {}
+        return;
+      } catch (e) {
+        print('[AUTH] cmd start failed: $e');
+      }
+    }
+    // Fallback: url_launcher
+    try {
+      final uri = Uri.parse(url);
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      print('[AUTH] launchUrl failed: $e');
     }
   }
 
