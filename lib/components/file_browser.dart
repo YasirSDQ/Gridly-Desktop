@@ -202,7 +202,24 @@ class _FileBrowserState extends State<FileBrowser> {
               },
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 16),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.white.withOpacity(0.1)),
+            ),
+            child: Text(
+              '${provider.folderCount} Folders • ${provider.fileCount} Files',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.7),
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
           PopupMenuButton<String>(
             icon: const Icon(Icons.sort, size: 20),
             onSelected: (value) {},
