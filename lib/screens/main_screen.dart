@@ -4,7 +4,7 @@ import 'package:bitsdojo_window/bitsdojo_window.dart';
 
 import '../models/models.dart';
 import '../services/rclone_service.dart';
-import '../providers/app_provider.dart';
+import '../models/models.dart';
 import '../components/sidebar.dart';
 import '../components/file_browser.dart';
 import '../components/transfer_panel.dart';

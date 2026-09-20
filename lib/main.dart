@@ -75,7 +75,7 @@ class GridlyDesktopApp extends StatelessWidget {
             bodyColor: Colors.white,
             displayColor: Colors.white,
           ),
-          cardTheme: CardTheme(
+          cardTheme: CardThemeData(
             color: const Color(0xFF1E293B).withOpacity(0.4),
             elevation: 0,
             shape: RoundedRectangleBorder(
