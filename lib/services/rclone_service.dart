@@ -435,25 +435,38 @@ class RCloneService {
     required String dstRemote,
     required bool isCopy,
     bool isFile = true,
+    bool ignoreExisting = false,
+    bool srcShared = false,
+    bool dstShared = false,
   }) async {
     String endpoint;
     Map<String, dynamic> params;
     
+    final finalSrcFs = srcShared ? '$srcFs,shared_with_me=true:' : '$srcFs:';
+    final finalDstFs = dstShared ? '$dstFs,shared_with_me=true:' : '$dstFs:';
+    
     if (isFile) {
       endpoint = isCopy ? '/operations/copyfile' : '/operations/movefile';
       params = {
-        'srcFs': '$srcFs:',
+        'srcFs': finalSrcFs,
         'srcRemote': srcRemote,
-        'dstFs': '$dstFs:',
+        'dstFs': finalDstFs,
         'dstRemote': dstRemote,
         '_async': true,
       };
     } else {
       endpoint = isCopy ? '/sync/copy' : '/sync/move';
       params = {
-        'srcFs': '$srcFs:$srcRemote',
-        'dstFs': '$dstFs:$dstRemote',
+        'srcFs': '$finalSrcFs$srcRemote',
+        'dstFs': '$finalDstFs$dstRemote',
         '_async': true,
+        'createEmptySrcDirs': true,
+      };
+    }
+    
+    if (ignoreExisting) {
+      params['_config'] = {
+        'IgnoreExisting': true,
       };
     }
     
