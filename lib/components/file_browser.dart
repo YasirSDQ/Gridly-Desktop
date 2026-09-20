@@ -236,7 +236,36 @@ class _FileBrowserState extends State<FileBrowser> {
   }
 
   Widget _buildFileList(AppProvider provider) {
-    // Loading state
+    // Error state
+    if (provider.error != null && provider.currentRemote.isNotEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 52, color: Colors.red.withOpacity(0.5)),
+            const SizedBox(height: 16),
+            const Text('Could not load files', style: TextStyle(color: Colors.white70, fontSize: 16)),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 40),
+              child: Text(provider.error!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white.withOpacity(0.35), fontSize: 12)),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: () {
+                final rcloneService = context.read<RCloneService>();
+                provider.navigateTo(provider.currentRemote, provider.currentPath, rcloneService);
+              },
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Retry'),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6366F1)),
+            ),
+          ],
+        ),
+      );
+    }
     if (provider.isLoading) {
       return const Center(
         child: Column(
