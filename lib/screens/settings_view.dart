@@ -74,6 +74,56 @@ class _SettingsViewState extends State<SettingsView> {
                   );
                 },
               ),
+              Consumer<AppProvider>(
+                builder: (context, provider, child) {
+                  return FutureBuilder<Map<String, dynamic>>(
+                    future: provider.getCacheDetails(),
+                    builder: (context, snapshot) {
+                      final size = snapshot.data?['size'] ?? 0;
+                      final count = snapshot.data?['count'] ?? 0;
+                      final sizeMB = (size / 1024 / 1024).toStringAsFixed(2);
+                      return ListTile(
+                        title: const Text('Cache Details', style: TextStyle(color: Colors.white)),
+                        subtitle: Text('Size: $sizeMB MB ($count folders cached)', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12)),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            TextButton.icon(
+                              onPressed: () async {
+                                try {
+                                  final path = await provider.exportCache();
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Cache exported to: $path'), backgroundColor: Colors.green),
+                                    );
+                                  }
+                                } catch (e) {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+                                    );
+                                  }
+                                }
+                              },
+                              icon: const Icon(Icons.download, size: 16, color: Color(0xFF818CF8)),
+                              label: const Text('Export', style: TextStyle(color: Color(0xFF818CF8))),
+                            ),
+                            const SizedBox(width: 8),
+                            TextButton.icon(
+                              onPressed: () async {
+                                // Assume they want to import from Downloads/GridlyCache.json
+                                importDialog(context, provider);
+                              },
+                              icon: const Icon(Icons.upload, size: 16, color: Color(0xFF818CF8)),
+                              label: const Text('Import', style: TextStyle(color: Color(0xFF818CF8))),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                  );
+                }
+              ),
               const Divider(color: Colors.white10, height: 1),
               Consumer<AppProvider>(
                 builder: (context, provider, child) {
@@ -83,14 +133,7 @@ class _SettingsViewState extends State<SettingsView> {
                       title: const Text('Clear Local Cache', style: TextStyle(color: Colors.white)),
                       subtitle: Text('Removes all saved file lists and accounts from device', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12)),
                       trailing: ElevatedButton(
-                        onPressed: () async {
-                          await provider.clearCache();
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Cache cleared successfully'), backgroundColor: Color(0xFF6366F1)),
-                            );
-                          }
-                        },
+                        onPressed: () => _confirmClearCache(context, provider),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.white.withOpacity(0.1),
                           foregroundColor: Colors.white,

@@ -1,7 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path;
 
 class RemoteConfig {
   final String name;
@@ -312,6 +315,73 @@ class AppProvider extends ChangeNotifier {
       if (key.startsWith('cached_')) {
         await prefs.remove(key);
       }
+    }
+    notifyListeners();
+  }
+
+  Future<Map<String, dynamic>> getCacheDetails() async {
+    final prefs = await SharedPreferences.getInstance();
+    int size = 0;
+    int count = 0;
+    final keys = prefs.getKeys();
+    for (String key in keys) {
+      if (key.startsWith('cached_files_')) {
+        final str = prefs.getString(key);
+        if (str != null) {
+          size += utf8.encode(str).length;
+          count++;
+        }
+      }
+    }
+    return {'size': size, 'count': count};
+  }
+
+  Future<String> exportCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      Map<String, String> cacheData = {};
+      final keys = prefs.getKeys();
+      for (String key in keys) {
+        if (key.startsWith('cached_')) {
+          final str = prefs.getString(key);
+          if (str != null) {
+            cacheData[key] = str;
+          }
+        }
+      }
+      
+      final downloadsDir = await getDownloadsDirectory();
+      if (downloadsDir == null) throw Exception("Could not find downloads directory");
+      
+      final file = File(path.join(downloadsDir.path, 'GridlyCache.json'));
+      await file.writeAsString(jsonEncode(cacheData));
+      return file.path;
+    } catch (e) {
+      throw Exception('Failed to export cache: $e');
+    }
+  }
+
+  Future<void> importCache(String filePath) async {
+    try {
+      final file = File(filePath);
+      if (!await file.exists()) {
+        throw Exception("File not found");
+      }
+      
+      final content = await file.readAsString();
+      final Map<String, dynamic> cacheData = jsonDecode(content);
+      
+      final prefs = await SharedPreferences.getInstance();
+      for (final entry in cacheData.entries) {
+        if (entry.key.startsWith('cached_')) {
+          await prefs.setString(entry.key, entry.value.toString());
+        }
+      }
+      
+      await initCache();
+      notifyListeners();
+    } catch (e) {
+      throw Exception('Failed to import cache: $e');
     }
   }
 
