@@ -129,10 +129,16 @@ class RCloneService {
   }
   
   Future<void> stopDaemon() async {
-    if (!_isRunning || _rcloneProcess == null) return;
+    if (Platform.isWindows) {
+      try {
+        await Process.run('taskkill', ['/F', '/IM', 'rclone.exe'], runInShell: false);
+      } catch (_) {}
+    }
+    
+    if (!_isRunning && _rcloneProcess == null) return;
     
     try {
-      _rcloneProcess!.kill();
+      _rcloneProcess?.kill();
       _rcloneProcess = null;
       _isRunning = false;
       print('RClone daemon stopped');
