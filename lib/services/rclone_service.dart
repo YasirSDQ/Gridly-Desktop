@@ -179,6 +179,45 @@ class RCloneService {
       await Process.run(_rclonePath!, ['config', 'delete', name], runInShell: true);
     }
   }
+
+  Process? _authorizeProcess;
+  
+  Future<void> generateDriveLoginCode(void Function(String url) onUrlReceived, void Function(String token) onTokenReceived) async {
+    if (_rclonePath == null) throw Exception('RClone not installed');
+    
+    _authorizeProcess?.kill();
+    _authorizeProcess = await Process.start(
+      _rclonePath!,
+      ['authorize', 'drive'],
+      runInShell: true,
+    );
+    
+    final stdoutStream = _authorizeProcess!.stdout.transform(utf8.decoder);
+    final stderrStream = _authorizeProcess!.stderr.transform(utf8.decoder);
+    
+    String output = '';
+    
+    stderrStream.listen((data) {
+      // rclone authorize drive prints the URL to stderr usually
+      final urlMatch = RegExp(r'(http://127\.0\.0\.1:53682/auth\?state=[^\s]+)').firstMatch(data);
+      if (urlMatch != null) {
+        onUrlReceived(urlMatch.group(1)!);
+      }
+    });
+    
+    stdoutStream.listen((data) {
+      output += data;
+      // If we see a JSON token in stdout
+      if (output.trim().startsWith('{') && output.trim().endsWith('}')) {
+        onTokenReceived(output.trim());
+      }
+    });
+  }
+  
+  void cancelAuthorize() {
+    _authorizeProcess?.kill();
+    _authorizeProcess = null;
+  }
   
   // File operations
   Future<List<Map<String, dynamic>>> listFiles(String remote, String path) async {
