@@ -355,13 +355,30 @@ class RCloneService {
     required String dstFs,
     required String dstRemote,
     required bool isCopy,
+    bool isFile = true,
   }) async {
-    final jobType = isCopy ? 'copy' : 'move';
-    final result = await _makeRequest('/sync/$jobType', {
-      'srcFs': '$srcFs:$srcRemote',
-      'dstFs': '$dstFs:$dstRemote',
-    });
+    String endpoint;
+    Map<String, dynamic> params;
     
+    if (isFile) {
+      endpoint = isCopy ? '/operations/copyfile' : '/operations/movefile';
+      params = {
+        'srcFs': '$srcFs:',
+        'srcRemote': srcRemote,
+        'dstFs': '$dstFs:',
+        'dstRemote': dstRemote,
+        '_async': true,
+      };
+    } else {
+      endpoint = isCopy ? '/sync/copy' : '/sync/move';
+      params = {
+        'srcFs': '$srcFs:$srcRemote',
+        'dstFs': '$dstFs:$dstRemote',
+        '_async': true,
+      };
+    }
+    
+    final result = await _makeRequest(endpoint, params);
     return result['jobid']?.toString() ?? '0';
   }
   
