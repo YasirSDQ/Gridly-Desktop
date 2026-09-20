@@ -192,15 +192,17 @@ class _AuthModalState extends State<AuthModal> {
         await _rcloneService.createConfigViaApi(remoteName, 'drive', {
           'scope': 'drive',
           'token': tokenStr,
+          'config_is_local': 'false', // Prevent rclone from spinning up an auth server!
         });
         apiSuccess = true;
-      } catch (_) {}
+      } catch (e) {}
 
       // Fall back to subprocess + reload
       if (!apiSuccess) {
         await _rcloneService.createConfig(remoteName, 'drive', {
           'scope': 'drive',
           'token': tokenStr,
+          'config_is_local': 'false',
         });
       }
 
