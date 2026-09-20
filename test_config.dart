@@ -10,10 +10,11 @@ void main() async {
       'Authorization': 'Basic ' + base64Encode(utf8.encode('admin:gridly2024')),
     },
     body: jsonEncode({
-      'name': 'TestAPI',
+      'name': 'TestAPI2',
       'type': 'drive',
       'parameters': {
         'scope': 'drive',
+        'config_is_local': 'false',
       }
     }),
   );
