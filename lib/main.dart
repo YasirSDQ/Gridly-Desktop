@@ -6,7 +6,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'services/rclone_service.dart';
 import 'models/models.dart';
 import 'screens/main_screen.dart';
-import 'components/custom_title_bar.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
