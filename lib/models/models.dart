@@ -488,6 +488,9 @@ class AppProvider extends ChangeNotifier {
     required bool isCopy,
     required bool isFile,
     required bool serverSide,
+    bool ignoreExisting = false,
+    bool srcShared = false,
+    bool dstShared = false,
   }) async {
     try {
       final jobId = await rcloneService.startTransfer(
@@ -497,6 +500,9 @@ class AppProvider extends ChangeNotifier {
         dstRemote: dstPath,
         isCopy: isCopy,
         isFile: isFile,
+        ignoreExisting: ignoreExisting,
+        srcShared: srcShared,
+        dstShared: dstShared,
       );
 
       final job = TransferJob(
