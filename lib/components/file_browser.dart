@@ -65,7 +65,14 @@ class _FileBrowserState extends State<FileBrowser> {
                   icon: const Icon(Icons.arrow_back, size: 20),
                   color: Colors.white.withOpacity(0.7),
                   onPressed: () {
-                    // Navigate up
+                    final rcloneService = context.read<RCloneService>();
+                    final provider = context.read<AppProvider>();
+                    if (provider.currentPath.isNotEmpty) {
+                      final parts = provider.currentPath.split('/');
+                      parts.removeLast();
+                      final newPath = parts.join('/');
+                      provider.navigateTo(provider.currentRemote, newPath, rcloneService);
+                    }
                   },
                   tooltip: 'Go Up',
                 ),
@@ -113,7 +120,7 @@ class _FileBrowserState extends State<FileBrowser> {
             },
             style: ButtonStyle(
               backgroundColor: WidgetStateProperty.all(
-                const Color(0xFF1E293B),
+                Colors.white.withOpacity(0.05),
               ),
             ),
           ),
@@ -278,9 +285,10 @@ class _FileBrowserState extends State<FileBrowser> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: const Color(0xFF1E293B).withOpacity(0.9),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: Colors.white.withOpacity(0.1)),
         ),
         title: const Text(
           'New Folder',
@@ -337,15 +345,18 @@ class _FileCard extends StatelessWidget {
       child: GestureDetector(
         onDoubleTap: () {
           if (file.isDir) {
-            // Navigate into folder
+            final rcloneService = context.read<RCloneService>();
+            final provider = context.read<AppProvider>();
+            final newPath = provider.currentPath.isEmpty ? file.name : '${provider.currentPath}/${file.name}';
+            provider.navigateTo(provider.currentRemote, newPath, rcloneService);
           }
         },
         child: Container(
           decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
+            color: Colors.white.withOpacity(0.05),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: Colors.white.withOpacity(0.05),
+              color: Colors.white.withOpacity(0.1),
             ),
           ),
           child: Column(
@@ -424,10 +435,10 @@ class _FileListItem extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: Colors.white.withOpacity(0.05),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: Colors.white.withOpacity(0.05),
+          color: Colors.white.withOpacity(0.1),
         ),
       ),
       child: Row(
