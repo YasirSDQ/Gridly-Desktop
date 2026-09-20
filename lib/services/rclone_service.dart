@@ -156,7 +156,7 @@ class RCloneService {
         'Authorization': 'Basic ${base64Encode(utf8.encode('admin:gridly2024'))}',
       },
       body: jsonEncode(params ?? {}),
-    ).timeout(const Duration(seconds: 30));
+    ).timeout(const Duration(seconds: 120));
     
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
