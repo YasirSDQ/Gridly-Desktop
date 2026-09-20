@@ -32,7 +32,7 @@ class _FileBrowserState extends State<FileBrowser> {
             _buildTopBar(provider),
             
             // Search and filter bar
-            _buildFilterBar(),
+            _buildFilterBar(provider),
             
             // File grid/list
             Expanded(
@@ -177,7 +177,7 @@ class _FileBrowserState extends State<FileBrowser> {
     );
   }
 
-  Widget _buildFilterBar() {
+  Widget _buildFilterBar(AppProvider provider) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       child: Row(
