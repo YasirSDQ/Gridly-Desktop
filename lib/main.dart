@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:bitsdojo_window/bitsdojo_window.dart';
-
+import 'package:google_fonts/google_fonts.dart';
 import 'services/rclone_service.dart';
 import 'models/models.dart';
 import 'screens/main_screen.dart';
@@ -60,21 +60,28 @@ class GridlyDesktopApp extends StatelessWidget {
         theme: ThemeData(
           useMaterial3: true,
           brightness: Brightness.dark,
-          primaryColor: const Color(0xFF6366F1),
+          primaryColor: const Color(0xFF6366F1), // primary
           scaffoldBackgroundColor: const Color(0xFF0F172A),
           colorScheme: const ColorScheme.dark(
-            primary: Color(0xFF6366F1),
-            secondary: Color(0xFF8B5CF6),
+            primary: Color(0xFF6366F1), // primary
+            secondary: Color(0xFF8B5CF6), // secondary
+            tertiary: Color(0xFF06B6D4), // accent
             surface: Color(0xFF1E293B),
             background: Color(0xFF0F172A),
             error: Color(0xFFEF4444),
           ),
-          fontFamily: 'Segoe UI',
+          textTheme: GoogleFonts.interTextTheme(Theme.of(context).textTheme).apply(
+            bodyColor: Colors.white,
+            displayColor: Colors.white,
+          ),
           cardTheme: CardThemeData(
-            color: const Color(0xFF1E293B),
+            color: const Color(0xFF1E293B).withOpacity(0.4),
             elevation: 0,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(
+                color: const Color(0xFF6366F1).withOpacity(0.15),
+              ),
             ),
           ),
           appBarTheme: const AppBarTheme(
@@ -83,10 +90,10 @@ class GridlyDesktopApp extends StatelessWidget {
           ),
           inputDecorationTheme: InputDecorationTheme(
             filled: true,
-            fillColor: const Color(0xFF1E293B),
+            fillColor: const Color(0xFF1E293B).withOpacity(0.6),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide.none,
+              borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),

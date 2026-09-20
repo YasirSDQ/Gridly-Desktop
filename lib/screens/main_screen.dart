@@ -32,7 +32,7 @@ class _MainScreenState extends State<MainScreen> {
       await rcloneService.startDaemon();
       
       if (mounted) {
-        await context.read<AppProvider>().loadRemotes();
+        await context.read<AppProvider>().loadRemotes(rcloneService);
       }
     } catch (e) {
       if (mounted) {
