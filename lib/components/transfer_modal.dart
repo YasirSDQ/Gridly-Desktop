@@ -763,8 +763,11 @@ class _TransferModalState extends State<TransferModal> {
           else
             ElevatedButton(
               onPressed: () {
+                String finalSrcPath = _sourcePath;
                 String finalDstPath = _destPath;
-                if (_selectedSourceItem != null && _selectedSourceItem!.isDir) {
+                
+                if (_selectedSourceItem != null) {
+                  finalSrcPath = _selectedSourceItem!.path;
                   finalDstPath = _destPath.isEmpty 
                       ? _selectedSourceItem!.name 
                       : '$_destPath/${_selectedSourceItem!.name}';
@@ -773,7 +776,7 @@ class _TransferModalState extends State<TransferModal> {
                 context.read<AppProvider>().startTransferAndPoll(
                   context.read<RCloneService>(),
                   srcRemote: _sourceRemote!,
-                  srcPath: _sourcePath,
+                  srcPath: finalSrcPath,
                   dstRemote: _destRemote!,
                   dstPath: finalDstPath,
                   isCopy: _isCopy,
