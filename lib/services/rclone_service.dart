@@ -219,18 +219,23 @@ class RCloneService {
     void Function(String url) onUrlReceived,
     void Function(String token) onTokenReceived,
   ) async {
-    if (_rclonePath == null) throw Exception('RClone not found. Path: $_rclonePath');
+    if (_rclonePath == null) throw Exception('RClone not found');
 
+    // Kill previous authorize process if any
     _authorizeProcess?.kill();
     _urlAlreadySent = false;
     _onTokenCallback = onTokenReceived;
 
-    print('[AUTH] Starting rclone authorize at: $_rclonePath');
+    // rclone authorize needs port 53682. Stop the daemon temporarily to free all rclone sockets.
+    print('[AUTH] Stopping daemon to free port 53682...');
+    await stopDaemon();
+    await Future.delayed(const Duration(milliseconds: 800));
 
+    print('[AUTH] Starting rclone authorize at: $_rclonePath');
     _authorizeProcess = await Process.start(
       _rclonePath!,
       ['authorize', 'drive'],
-      runInShell: true, // keep consistent with daemon — shell handles PATH & pipes correctly
+      runInShell: true,
     );
 
     final stdoutStream = _authorizeProcess!.stdout.transform(utf8.decoder);
@@ -248,7 +253,7 @@ class RCloneService {
         final urlMatch = urlRegex.firstMatch(accumulated);
         if (urlMatch != null) {
           _urlAlreadySent = true;
-          final url = urlMatch.group(0)!.trimRight();
+          final url = urlMatch.group(0)!.trim();
           print('[AUTH] URL found: $url');
           onUrlReceived(url);
         }
@@ -260,10 +265,12 @@ class RCloneService {
           final maybeJson = tokenMatch.group(0)!;
           try {
             jsonDecode(maybeJson);
-            print('[AUTH] Token found!');
+            print('[AUTH] Token received!');
             _onTokenCallback?.call(maybeJson);
             _onTokenCallback = null;
             accumulated = '';
+            // Restart daemon now that auth is done
+            Future.delayed(const Duration(milliseconds: 500), () => startDaemon());
           } catch (_) {}
         }
       }
@@ -271,11 +278,20 @@ class RCloneService {
 
     stderrStream.listen(processChunk, onError: (e) => print('[AUTH STDERR ERR] $e'));
     stdoutStream.listen(processChunk, onError: (e) => print('[AUTH STDOUT ERR] $e'));
+
+    // Also restart daemon when authorize exits (user cancelled or completed)
+    _authorizeProcess!.exitCode.then((_) {
+      print('[AUTH] authorize process exited, restarting daemon...');
+      Future.delayed(const Duration(milliseconds: 500), () => startDaemon());
+    });
   }
   
   void cancelAuthorize() {
     _authorizeProcess?.kill();
     _authorizeProcess = null;
+    _onTokenCallback = null;
+    // Ensure daemon is restarted after cancel
+    Future.delayed(const Duration(milliseconds: 500), () => startDaemon());
   }
   
   // File operations
