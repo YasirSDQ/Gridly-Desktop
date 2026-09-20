@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
@@ -18,9 +20,10 @@ class _AuthModalState extends State<AuthModal> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _codeController = TextEditingController();
   late final RCloneService _rcloneService;
-  
+
   bool _loadingCode = false;
   bool _loadingSubmit = false;
+  String? _authUrl; // the URL to show the user
 
   @override
   void didChangeDependencies() {
@@ -32,38 +35,72 @@ class _AuthModalState extends State<AuthModal> {
   void dispose() {
     _nameController.dispose();
     _codeController.dispose();
-    // In case the user closes the modal while authorize is running
     _rcloneService.cancelAuthorize();
     super.dispose();
   }
 
+  // Open URL: try url_launcher first, fall back to Windows start command
+  Future<void> _openUrl(String url) async {
+    final uri = Uri.parse(url);
+    bool launched = false;
+    try {
+      launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {}
+
+    if (!launched && Platform.isWindows) {
+      try {
+        await Process.run('cmd', ['/c', 'start', '', url], runInShell: false);
+      } catch (_) {}
+    }
+  }
+
   Future<void> _handleGenerateCode() async {
-    setState(() => _loadingCode = true);
-    
+    final remoteName = _nameController.text.trim();
+    if (remoteName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a Remote Name first.'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
+    setState(() {
+      _loadingCode = true;
+      _authUrl = null;
+    });
+
     try {
       await _rcloneService.generateDriveLoginCode(
         (url) async {
-          final uri = Uri.parse(url);
-          if (await canLaunchUrl(uri)) {
-            await launchUrl(uri);
-          } else {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Could not open browser. Check rclone logs.')),
-              );
-            }
+          // URL received — show it and open browser
+          if (mounted) {
+            setState(() {
+              _authUrl = url;
+              _loadingCode = false;
+            });
           }
-          if (mounted) setState(() => _loadingCode = false);
+          await _openUrl(url);
         },
         (token) {
-          // If we receive the token from the stdout stream (e.g. after successful auth)
+          // Token received automatically after browser auth
           _createConfigWithToken(token);
         },
       );
+
+      // Safety timeout: reset button after 60s if URL never received
+      await Future.delayed(const Duration(seconds: 60));
+      if (mounted && _loadingCode) {
+        setState(() => _loadingCode = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Auth timed out. Please try again.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error generating code: $e')),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
         setState(() => _loadingCode = false);
       }
@@ -73,33 +110,51 @@ class _AuthModalState extends State<AuthModal> {
   Future<void> _handleSubmitUrl() async {
     final codeValue = _codeController.text.trim();
     final remoteName = _nameController.text.trim();
-    
-    if (remoteName.isEmpty || codeValue.isEmpty) return;
-    
+
+    if (remoteName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a Remote Name.'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+    if (codeValue.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please paste the callback URL or JSON token.'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
     setState(() => _loadingSubmit = true);
-    
+
     try {
-      if (codeValue.startsWith('{') && codeValue.endsWith('}')) {
-        // It's a JSON token directly
+      if (codeValue.startsWith('{')) {
+        // Direct JSON token
         await _createConfigWithToken(codeValue);
-      } else if (codeValue.startsWith('http://127.0.0.1')) {
-        // It's the callback URL. Hit it so rclone gets the code.
+      } else if (codeValue.startsWith('http://127.0.0.1') || codeValue.startsWith('http://localhost')) {
+        // Callback URL — hit it so rclone captures the auth code
         try {
-          await http.get(Uri.parse(codeValue)).timeout(const Duration(seconds: 5));
-        } catch (e) {
-          // It might throw because rclone closes the connection immediately
+          await http.get(Uri.parse(codeValue)).timeout(const Duration(seconds: 10));
+        } catch (_) {
+          // Expected: rclone closes the connection immediately
         }
-        
-        // If we don't get a response (modal doesn't close) in 15 seconds, reset the button
-        await Future.delayed(const Duration(seconds: 15));
+
+        // Wait up to 10s for the token callback to fire
+        for (int i = 0; i < 10; i++) {
+          await Future.delayed(const Duration(seconds: 1));
+          if (!mounted || !_loadingSubmit) return; // token came in and closed modal
+        }
+
         if (mounted) {
           setState(() => _loadingSubmit = false);
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Auth process did not return a token. Please click "GENERATE" again.'), backgroundColor: Colors.red),
+            const SnackBar(
+              content: Text('Did not receive token. Try clicking Generate again.'),
+              backgroundColor: Colors.red,
+            ),
           );
         }
       } else {
-        throw Exception('Invalid input. Please paste the callback URL or JSON token.');
+        throw Exception('Invalid input. Paste the callback URL (http://127.0.0.1:...) or JSON token.');
       }
     } catch (e) {
       if (mounted) {
@@ -113,22 +168,27 @@ class _AuthModalState extends State<AuthModal> {
 
   Future<void> _createConfigWithToken(String tokenStr) async {
     final remoteName = _nameController.text.trim();
-    if (remoteName.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter a remote name first.'), backgroundColor: Colors.orange),
-        );
-      }
-      return;
-    }
-    
+    if (remoteName.isEmpty) return;
+
     try {
-      // Use RC API to create config so the running daemon picks it up immediately
-      await _rcloneService.createConfigViaApi(remoteName, 'drive', {
-        'scope': 'drive',
-        'token': tokenStr,
-      });
-      
+      // Try RC API first (daemon picks it up immediately)
+      bool apiSuccess = false;
+      try {
+        await _rcloneService.createConfigViaApi(remoteName, 'drive', {
+          'scope': 'drive',
+          'token': tokenStr,
+        });
+        apiSuccess = true;
+      } catch (_) {}
+
+      // Fall back to subprocess + reload
+      if (!apiSuccess) {
+        await _rcloneService.createConfig(remoteName, 'drive', {
+          'scope': 'drive',
+          'token': tokenStr,
+        });
+      }
+
       if (mounted) {
         final provider = context.read<AppProvider>();
         await provider.loadRemotes(_rcloneService);
@@ -136,7 +196,7 @@ class _AuthModalState extends State<AuthModal> {
           Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Successfully connected Google Drive as $remoteName'),
+              content: Text('✅ Connected "$remoteName" successfully!'),
               backgroundColor: const Color(0xFF10B981),
             ),
           );
@@ -156,32 +216,34 @@ class _AuthModalState extends State<AuthModal> {
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.all(16),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
       child: Container(
-        width: 500,
+        width: 520,
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
         decoration: BoxDecoration(
-          color: const Color(0xFF0F172A).withOpacity(0.95), // dark blue/slate
+          color: const Color(0xFF0F172A),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.white.withOpacity(0.1)),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.5),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
+              blurRadius: 30,
+              offset: const Offset(0, 15),
             ),
           ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Header
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B).withOpacity(0.8),
+                color: const Color(0xFF1E293B),
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.1))),
+                border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.08))),
               ),
               child: Row(
                 children: [
@@ -193,210 +255,189 @@ class _AuthModalState extends State<AuthModal> {
                       border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.3)),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.add_to_drive, color: Color(0xFF818CF8), size: 24),
+                    child: const Icon(Icons.add_to_drive, color: Color(0xFF818CF8), size: 22),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 14),
                   const Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Connect Google Drive',
-                          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          'using rclone headless auth',
-                          style: TextStyle(color: Colors.white54, fontSize: 12),
-                        ),
+                        Text('Connect Google Drive',
+                            style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
+                        Text('Headless auth via rclone',
+                            style: TextStyle(color: Colors.white38, fontSize: 12)),
                       ],
                     ),
                   ),
                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close, color: Colors.white54, size: 20),
-                    hoverColor: Colors.white.withOpacity(0.1),
+                    icon: const Icon(Icons.close, color: Colors.white38, size: 18),
                   ),
                 ],
               ),
             ),
 
-            // Content
+            // Scrollable body
             Flexible(
               child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                  // Remote Name
-                  const Text('Remote Name (e.g., mydrive)', style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _nameController,
-                    decoration: InputDecoration(
-                      hintText: 'Enter remote name',
-                      hintStyle: const TextStyle(color: Colors.white30),
-                      filled: true,
-                      fillColor: const Color(0xFF0F172A),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Color(0xFF6366F1)),
-                      ),
+                padding: const EdgeInsets.all(22),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Step 1: Remote Name
+                    _SectionLabel(label: 'STEP 1 — NAME YOUR ACCOUNT'),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _nameController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: _inputDecoration('e.g.  mydrive'),
                     ),
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                  const SizedBox(height: 20),
 
-                  // Red Warning banner
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF43F5E).withOpacity(0.1),
-                      border: Border.all(color: const Color(0xFFF43F5E).withOpacity(0.2)),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'Please Paste the Code URL, Follow Below Steps',
-                        style: TextStyle(color: Color(0xFFFB7185), fontSize: 14, fontWeight: FontWeight.w600),
+                    const SizedBox(height: 20),
+
+                    // Step 2: Generate
+                    _SectionLabel(label: 'STEP 2 — GENERATE LOGIN URL'),
+                    const SizedBox(height: 8),
+                    ElevatedButton.icon(
+                      onPressed: _loadingCode ? null : _handleGenerateCode,
+                      icon: _loadingCode
+                          ? const SizedBox(width: 16, height: 16,
+                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          : const Icon(Icons.code, size: 18),
+                      label: Text(_loadingCode ? 'WAITING FOR RCLONE...' : 'GENERATE LOGIN CODE',
+                          style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFE11D48),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 20),
 
-                  // Big card
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B).withOpacity(0.5),
-                      border: Border.all(color: Colors.white.withOpacity(0.1)),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // Input and Submit
-                        TextField(
-                          controller: _codeController,
-                          decoration: InputDecoration(
-                            hintText: 'Enter Login URL (http://...) or JSON Token',
-                            hintStyle: const TextStyle(color: Colors.white30),
-                            filled: true,
-                            fillColor: const Color(0xFF0F172A),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
-                            ),
-                          ),
-                          style: const TextStyle(color: Colors.white, fontSize: 14),
+                    // Show the auth URL if we have it
+                    if (_authUrl != null) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E3A5F),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.4)),
                         ),
-                        const SizedBox(height: 12),
-                        ElevatedButton(
-                          onPressed: _loadingSubmit ? null : _handleSubmitUrl,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2563EB), // blue-600
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            elevation: 4,
-                            shadowColor: const Color(0xFF2563EB).withOpacity(0.5),
-                          ),
-                          child: Text(
-                            _loadingSubmit ? 'SUBMITTING...' : 'SUBMIT CODE URL',
-                            style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
-                          ),
-                        ),
-
-                        const SizedBox(height: 24),
-                        const Divider(color: Colors.white12),
-                        const SizedBox(height: 16),
-
-                        // Generate Login Code section
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(Icons.bolt, color: Color(0xFFFACC15), size: 20), // yellow
-                            const SizedBox(width: 8),
-                            const Text(
-                              'Click on Button to Get Login Code',
-                              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                            Row(
+                              children: [
+                                const Icon(Icons.link, color: Color(0xFF60A5FA), size: 16),
+                                const SizedBox(width: 8),
+                                const Text('Auth URL (opened in browser)',
+                                    style: TextStyle(color: Color(0xFF60A5FA), fontSize: 12, fontWeight: FontWeight.w600)),
+                                const Spacer(),
+                                GestureDetector(
+                                  onTap: () {
+                                    Clipboard.setData(ClipboardData(text: _authUrl!));
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('URL copied!')),
+                                    );
+                                  },
+                                  child: const Icon(Icons.copy, color: Color(0xFF60A5FA), size: 16),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 8),
-                            const Icon(Icons.bolt, color: Color(0xFFFACC15), size: 20),
+                            const SizedBox(height: 6),
+                            Text(_authUrl!,
+                                style: const TextStyle(color: Colors.white54, fontSize: 11),
+                                overflow: TextOverflow.ellipsis),
+                            const SizedBox(height: 8),
+                            GestureDetector(
+                              onTap: () => _openUrl(_authUrl!),
+                              child: const Text('Click here to open manually →',
+                                  style: TextStyle(color: Color(0xFF818CF8), fontSize: 12,
+                                      decoration: TextDecoration.underline)),
+                            ),
                           ],
                         ),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: _loadingCode ? null : _handleGenerateCode,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFE11D48), // rose-600
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            elevation: 4,
-                            shadowColor: const Color(0xFFE11D48).withOpacity(0.5),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              if (_loadingCode)
-                                const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                              else
-                                const Icon(Icons.code, size: 20),
-                              const SizedBox(width: 8),
-                              Text(
-                                _loadingCode ? 'GENERATING...' : 'CLICK HERE GENERATE LOGIN CODE',
-                                style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
-                              ),
-                            ],
-                          ),
-                        ),
+                      ),
+                    ],
 
-                        const SizedBox(height: 20),
-                        
-                        // Instructions
-                        const Text('1. Click the Generate Login Code button above.', style: TextStyle(color: Colors.white60, fontSize: 12)),
-                        const SizedBox(height: 4),
-                        const Text('2. A new tab will open Google\'s login page. Approve access.', style: TextStyle(color: Colors.white60, fontSize: 12)),
-                        const SizedBox(height: 4),
-                        const Text('3. You will be redirected to an empty or error page (127.0.0.1).', style: TextStyle(color: Colors.white60, fontSize: 12)),
-                        const SizedBox(height: 4),
-                        RichText(
-                          text: const TextSpan(
-                            style: TextStyle(color: Colors.white60, fontSize: 12),
-                            children: [
-                              TextSpan(text: '4. '),
-                              TextSpan(text: 'Copy the entire URL', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                              TextSpan(text: ' from your browser\'s address bar.'),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text('5. Paste it into the input field above and click Submit.', style: TextStyle(color: Colors.white60, fontSize: 12)),
-                      ],
+                    const SizedBox(height: 20),
+                    Divider(color: Colors.white.withOpacity(0.07)),
+                    const SizedBox(height: 14),
+
+                    // Step 3: Paste callback URL
+                    _SectionLabel(label: 'STEP 3 — PASTE CALLBACK URL'),
+                    const SizedBox(height: 6),
+                    Text(
+                      'After approving in the browser, you\'ll be redirected to a 127.0.0.1 URL. Copy the full URL from the address bar and paste it below.',
+                      style: TextStyle(color: Colors.white.withOpacity(0.45), fontSize: 12, height: 1.5),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _codeController,
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      decoration: _inputDecoration('http://127.0.0.1:53682/?code=...&state=...'),
+                    ),
+                    const SizedBox(height: 10),
+                    ElevatedButton(
+                      onPressed: _loadingSubmit ? null : _handleSubmitUrl,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6366F1),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: Text(
+                        _loadingSubmit ? 'CONNECTING...' : 'SUBMIT & CONNECT',
+                        style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
+          ],
         ),
-      ],
-        ),
+      ),
+    );
+  }
+
+  InputDecoration _inputDecoration(String hint) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: const TextStyle(color: Colors.white24, fontSize: 13),
+      filled: true,
+      fillColor: const Color(0xFF1E293B),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: Colors.white.withOpacity(0.12)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Color(0xFF6366F1), width: 1.5),
+      ),
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  final String label;
+  const _SectionLabel({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: TextStyle(
+        color: Colors.white.withOpacity(0.35),
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 1.2,
       ),
     );
   }
