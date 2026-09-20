@@ -236,8 +236,56 @@ class _FileBrowserState extends State<FileBrowser> {
   }
 
   Widget _buildFileList(AppProvider provider) {
+    // Loading state
+    if (provider.isLoading) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF6366F1)),
+            ),
+            SizedBox(height: 16),
+            Text('Loading files...', style: TextStyle(color: Colors.white54)),
+          ],
+        ),
+      );
+    }
+
+    // No remote selected
+    if (provider.currentRemote.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [const Color(0xFF6366F1).withOpacity(0.2), const Color(0xFF8B5CF6).withOpacity(0.1)],
+                ),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Icon(Icons.add_to_drive, size: 40, color: Colors.white.withOpacity(0.3)),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'No account connected',
+              style: TextStyle(color: Colors.white70, fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Click "Add Account" to connect a cloud drive',
+              style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 14),
+            ),
+          ],
+        ),
+      );
+    }
+
     final files = provider.currentFiles;
-    
+
     if (files.isEmpty) {
       return Center(
         child: Column(
