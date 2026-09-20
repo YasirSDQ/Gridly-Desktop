@@ -17,16 +17,23 @@ class AuthModal extends StatefulWidget {
 class _AuthModalState extends State<AuthModal> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _codeController = TextEditingController();
+  late final RCloneService _rcloneService;
   
   bool _loadingCode = false;
   bool _loadingSubmit = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _rcloneService = context.read<RCloneService>();
+  }
 
   @override
   void dispose() {
     _nameController.dispose();
     _codeController.dispose();
     // In case the user closes the modal while authorize is running
-    context.read<RCloneService>().cancelAuthorize();
+    _rcloneService.cancelAuthorize();
     super.dispose();
   }
 
@@ -34,9 +41,7 @@ class _AuthModalState extends State<AuthModal> {
     setState(() => _loadingCode = true);
     
     try {
-      final rcloneService = context.read<RCloneService>();
-      
-      await rcloneService.generateDriveLoginCode(
+      await _rcloneService.generateDriveLoginCode(
         (url) async {
           final uri = Uri.parse(url);
           if (await canLaunchUrl(uri)) {
@@ -108,24 +113,34 @@ class _AuthModalState extends State<AuthModal> {
 
   Future<void> _createConfigWithToken(String tokenStr) async {
     final remoteName = _nameController.text.trim();
-    if (remoteName.isEmpty) return;
+    if (remoteName.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter a remote name first.'), backgroundColor: Colors.orange),
+        );
+      }
+      return;
+    }
     
     try {
-      final rcloneService = context.read<RCloneService>();
-      await rcloneService.createConfig(remoteName, 'drive', {
+      // Use RC API to create config so the running daemon picks it up immediately
+      await _rcloneService.createConfigViaApi(remoteName, 'drive', {
         'scope': 'drive',
         'token': tokenStr,
       });
       
       if (mounted) {
-        await context.read<AppProvider>().loadRemotes(rcloneService);
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Successfully connected Google Drive as $remoteName'),
-            backgroundColor: const Color(0xFF10B981),
-          ),
-        );
+        final provider = context.read<AppProvider>();
+        await provider.loadRemotes(_rcloneService);
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Successfully connected Google Drive as $remoteName'),
+              backgroundColor: const Color(0xFF10B981),
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
