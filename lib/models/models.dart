@@ -198,9 +198,19 @@ class AppProvider extends ChangeNotifier {
       _remotes = newRemotes;
       
       if (_remotes.isNotEmpty) {
-        // Automatically navigate to the first remote
-        await navigateTo(_remotes.first.name, '', rcloneService);
+        // If current remote is still valid, keep it; otherwise switch to first
+        final stillExists = _remotes.any((r) => r.name == _currentRemote);
+        if (!stillExists || _currentRemote.isEmpty) {
+          await navigateTo(_remotes.first.name, '', rcloneService);
+        } else {
+          // Refresh current view
+          await navigateTo(_currentRemote, _currentPath, rcloneService);
+        }
       } else {
+        // No remotes left — clear state
+        _currentRemote = '';
+        _currentPath = '';
+        _currentFiles = [];
         setError(null);
       }
     } catch (e) {

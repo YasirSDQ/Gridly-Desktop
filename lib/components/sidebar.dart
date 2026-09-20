@@ -358,6 +358,45 @@ class Sidebar extends StatelessWidget {
     }
   }
 
+  void _confirmRemoveAccount(BuildContext context, AppProvider provider, String name) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(color: Colors.white.withOpacity(0.1)),
+        ),
+        title: const Text('Remove Account', style: TextStyle(color: Colors.white, fontSize: 16)),
+        content: Text(
+          'Remove "$name" from Gridly? The remote will be deleted from rclone config.',
+          style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final rcloneService = context.read<RCloneService>();
+              await rcloneService.deleteConfig(name);
+              if (context.mounted) {
+                await provider.loadRemotes(rcloneService);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Remove', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showAddRemoteDialog(BuildContext context) {
     showDialog(
       context: context,
