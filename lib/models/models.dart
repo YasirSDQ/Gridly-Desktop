@@ -202,6 +202,7 @@ class AppProvider extends ChangeNotifier {
   List<RemoteConfig> _remotes = [];
   List<FileItem> _currentFiles = [];
   List<TransferJob> _activeTransfers = [];
+  final Map<String, List<FileItem>> _folderCache = {};
 
   String _currentRemote = '';
   String _currentPath = '';
@@ -245,6 +246,7 @@ class AppProvider extends ChangeNotifier {
       
       _currentRemote = prefs.getString('cached_current_remote') ?? '';
       _currentPath = prefs.getString('cached_current_path') ?? '';
+      _isSharedWithMe = prefs.getBool('cached_is_shared') ?? false;
       
       final remotesStr = prefs.getString('cached_remotes');
       if (remotesStr != null) {
@@ -253,10 +255,12 @@ class AppProvider extends ChangeNotifier {
       }
 
       if (_currentRemote.isNotEmpty) {
-        final filesStr = prefs.getString('cached_files_${_currentRemote}_$_currentPath');
+        final cacheKey = '${_currentRemote}_${_currentPath}_$_isSharedWithMe';
+        final filesStr = prefs.getString('cached_files_$cacheKey');
         if (filesStr != null) {
           final List decoded = jsonDecode(filesStr);
           _currentFiles = decoded.map((e) => FileItem.fromJson(e)).toList();
+          _folderCache[cacheKey] = List.from(_currentFiles);
         }
       }
       
@@ -272,13 +276,16 @@ class AppProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('cached_current_remote', _currentRemote);
       await prefs.setString('cached_current_path', _currentPath);
+      await prefs.setBool('cached_is_shared', _isSharedWithMe);
       
       final remotesStr = jsonEncode(_remotes.map((e) => e.toJson()).toList());
       await prefs.setString('cached_remotes', remotesStr);
       
       if (_currentRemote.isNotEmpty && _currentFiles.isNotEmpty) {
+        final cacheKey = '${_currentRemote}_${_currentPath}_$_isSharedWithMe';
+        _folderCache[cacheKey] = List.from(_currentFiles);
         final filesStr = jsonEncode(_currentFiles.map((e) => e.toJson()).toList());
-        await prefs.setString('cached_files_${_currentRemote}_$_currentPath', filesStr);
+        await prefs.setString('cached_files_$cacheKey', filesStr);
       }
     } catch (e) {
       print('Failed to save cache: $e');
@@ -298,6 +305,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> clearCache() async {
+    _folderCache.clear();
     final prefs = await SharedPreferences.getInstance();
     final keys = prefs.getKeys();
     for (String key in keys) {
@@ -366,22 +374,34 @@ class AppProvider extends ChangeNotifier {
       _isSharedWithMe = shared;
     }
     
-    // If we're navigating to a DIFFERENT path or mode, try to load cache immediately for instant UI update
-    if (_currentRemote != remote || _currentPath != path) {
-       _currentFiles = [];
-       if (_cacheEnabled) {
-         try {
-           final prefs = await SharedPreferences.getInstance();
-           final filesStr = prefs.getString('cached_files_${remote}_$path');
-           if (filesStr != null) {
-             final List decoded = jsonDecode(filesStr);
-             _currentFiles = decoded.map((e) => FileItem.fromJson(e)).toList();
-           }
-         } catch (e) {
-           print('Error loading cache for navigation: $e');
-         }
-       }
+    final cacheKey = '${remote}_${path}_$_isSharedWithMe';
+    bool loadedFromCache = false;
+
+    if (_cacheEnabled) {
+      if (_folderCache.containsKey(cacheKey)) {
+        _currentFiles = List.from(_folderCache[cacheKey]!);
+        loadedFromCache = true;
+      } else {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final filesStr = prefs.getString('cached_files_$cacheKey');
+          if (filesStr != null) {
+            final List decoded = jsonDecode(filesStr);
+            _currentFiles = decoded.map((e) => FileItem.fromJson(e)).toList();
+            _folderCache[cacheKey] = List.from(_currentFiles);
+            loadedFromCache = true;
+          } else {
+            _currentFiles = [];
+          }
+        } catch (e) {
+          print('Error loading disk cache for navigation: $e');
+          _currentFiles = [];
+        }
+      }
+    } else {
+      _currentFiles = [];
     }
+    
     _currentRemote = remote;
     _currentPath = path;
     _currentTab = 'drive';
