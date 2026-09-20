@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path;
 import '../models/models.dart';
 
 class SettingsView extends StatefulWidget {
@@ -164,6 +166,73 @@ class _SettingsViewState extends State<SettingsView> {
     );
   }
   
+  void _confirmClearCache(BuildContext context, AppProvider provider) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(color: Colors.white.withOpacity(0.1)),
+        ),
+        title: const Text('Clear Local Cache', style: TextStyle(color: Colors.white, fontSize: 16)),
+        content: Text(
+          'Are you sure you want to clear the local cache? This will remove all instantly-loading folders and accounts.',
+          style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await provider.clearCache();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Cache cleared successfully'), backgroundColor: Color(0xFF6366F1)),
+                );
+                // Trigger rebuild of the future builder
+                setState(() {});
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Clear', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void importDialog(BuildContext context, AppProvider provider) async {
+    try {
+      // Typically we'd use a file picker here, but for simplicity we assume the default location
+      // so it works perfectly across platforms without native compilation restarts.
+      final downloadsDir = await getDownloadsDirectory();
+      if (downloadsDir == null) throw Exception("Could not find downloads directory");
+      final pathStr = path.join(downloadsDir.path, 'GridlyCache.json');
+      
+      await provider.importCache(pathStr);
+      
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Cache imported successfully!'), backgroundColor: Colors.green),
+        );
+        setState(() {}); // refresh details
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   Widget _buildSettingsGroup({required String title, required List<Widget> children}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
