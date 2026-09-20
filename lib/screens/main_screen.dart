@@ -88,11 +88,19 @@ class _MainScreenState extends State<MainScreen> {
                       AnimatedContainer(
                         duration: const Duration(milliseconds: 300),
                         width: _isTransferPanelOpen ? 400 : 0,
-                        child: _isTransferPanelOpen 
-                            ? TransferPanel(onClose: () {
-                                setState(() => _isTransferPanelOpen = false);
-                              })
-                            : const SizedBox.shrink(),
+                        curve: Curves.easeInOut,
+                        child: ClipRect(
+                          child: OverflowBox(
+                            minWidth: 400,
+                            maxWidth: 400,
+                            alignment: Alignment.centerLeft,
+                            child: _isTransferPanelOpen 
+                                ? TransferPanel(onClose: () {
+                                    setState(() => _isTransferPanelOpen = false);
+                                  })
+                                : const SizedBox.shrink(),
+                          ),
+                        ),
                       ),
                     ],
                   ),
