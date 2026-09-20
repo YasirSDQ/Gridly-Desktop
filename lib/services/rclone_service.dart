@@ -136,6 +136,7 @@ class RCloneService {
       Uri.parse(url),
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': 'Basic ${base64Encode(utf8.encode('admin:gridly2024'))}',
       },
       body: jsonEncode(params ?? {}),
     ).timeout(const Duration(seconds: 30));
@@ -184,7 +185,19 @@ class RCloneService {
   Future<void> deleteConfig(String name) async {
     if (_rclonePath != null) {
       await Process.run(_rclonePath!, ['config', 'delete', name], runInShell: true);
+      // Also reload config in daemon
+      try { await _makeRequest('/config/reload'); } catch (_) {}
     }
+  }
+
+  // Create config via RC API so the running daemon picks it up immediately
+  Future<void> createConfigViaApi(String name, String type, Map<String, String> params) async {
+    final Map<String, dynamic> body = {
+      'name': name,
+      'type': type,
+      'parameters': params,
+    };
+    await _makeRequest('/config/create', body);
   }
 
   Process? _authorizeProcess;
