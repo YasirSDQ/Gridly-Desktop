@@ -29,12 +29,17 @@ class _MainScreenState extends State<MainScreen> {
   
   Future<void> _initializeApp() async {
     final rcloneService = context.read<RCloneService>();
+    final provider = context.read<AppProvider>();
+    
+    // Load cache instantly so UI populates fast
+    await provider.initCache();
+    
     try {
       await rcloneService.initialize();
       await rcloneService.startDaemon();
       
       if (mounted) {
-        await context.read<AppProvider>().loadRemotes(rcloneService);
+        await provider.loadRemotes(rcloneService);
       }
     } catch (e) {
       if (mounted) {

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../models/models.dart';
 
 class SettingsView extends StatefulWidget {
   const SettingsView({super.key});
@@ -53,6 +55,52 @@ class _SettingsViewState extends State<SettingsView> {
                 subtitle: 'Verify checksums during transfer (slower)',
                 value: _checksum,
                 onChanged: (v) => setState(() => _checksum = v),
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 24),
+          
+          _buildSettingsGroup(
+            title: 'Cache Settings',
+            children: [
+              Consumer<AppProvider>(
+                builder: (context, provider, child) {
+                  return _buildSwitchSetting(
+                    title: 'Enable Cache Saving',
+                    subtitle: 'Save remote data locally for instant loading on startup',
+                    value: provider.cacheEnabled,
+                    onChanged: (v) => provider.setCacheEnabled(v),
+                  );
+                },
+              ),
+              const Divider(color: Colors.white10, height: 1),
+              Consumer<AppProvider>(
+                builder: (context, provider, child) {
+                  return Material(
+                    color: Colors.transparent,
+                    child: ListTile(
+                      title: const Text('Clear Local Cache', style: TextStyle(color: Colors.white)),
+                      subtitle: Text('Removes all saved file lists and accounts from device', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12)),
+                      trailing: ElevatedButton(
+                        onPressed: () async {
+                          await provider.clearCache();
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Cache cleared successfully'), backgroundColor: Color(0xFF6366F1)),
+                            );
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white.withOpacity(0.1),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                        ),
+                        child: const Text('Clear'),
+                      ),
+                    ),
+                  );
+                }
               ),
             ],
           ),

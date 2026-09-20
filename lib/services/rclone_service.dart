@@ -161,7 +161,19 @@ class RCloneService {
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
     } else {
-      throw Exception('RClone API error: ${response.statusCode} - ${response.body}');
+      String errMsg = 'API Error ${response.statusCode}';
+      try {
+        final errJson = jsonDecode(response.body);
+        if (errJson['error'] != null) {
+          errMsg = errJson['error'].toString();
+          if (errMsg.startsWith('error in ListJSON: ')) {
+            errMsg = errMsg.replaceFirst('error in ListJSON: ', '');
+          }
+        }
+      } catch (_) {
+        errMsg = response.body;
+      }
+      throw Exception(errMsg);
     }
   }
   
@@ -300,11 +312,11 @@ class RCloneService {
   }
   
   // File operations
-  Future<List<Map<String, dynamic>>> listFiles(String remote, String path) async {
-    // /operations/list is the correct RC endpoint (not listfiles)
-    // Keep params simple — don't nest under 'opt'
+  Future<List<Map<String, dynamic>>> listFiles(String remote, String path, {bool shared = false}) async {
+    final fsPath = shared ? '$remote,shared_with_me=true:' : '$remote:';
+    
     final result = await _makeRequest('/operations/list', {
-      'fs': '$remote:',
+      'fs': fsPath,
       'remote': path,
     });
 
@@ -330,10 +342,15 @@ class RCloneService {
         'total': result['total'] ?? 0,
         'used': result['used'] ?? 0,
         'free': result['free'] ?? 0,
+        'isExpired': false,
       };
     } catch (e) {
-      // Some remotes don't support about (e.g. local without right flags, or specific cloud providers)
-      return {'total': 0, 'used': 0, 'free': 0};
+      final errStr = e.toString().toLowerCase();
+      bool isExpired = false;
+      if (errStr.contains('expired') || errStr.contains('token') || errStr.contains('oauth') || errStr.contains('auth')) {
+        isExpired = true;
+      }
+      return {'total': 0, 'used': 0, 'free': 0, 'isExpired': isExpired};
     }
   }
 
@@ -445,15 +462,57 @@ class RCloneService {
   }
   
   Future<Map<String, dynamic>> getTransferStatus(String jobId) async {
-    final result = await _makeRequest('/job/status', {'jobid': int.parse(jobId)});
-    return {
-      'state': result['state'] ?? 'UNKNOWN',
-      'percent': result['percent'] ?? 0,
-      'speed': result['speed'] ?? 0,
-      'bytes': result['bytes'] ?? 0,
-      'eta': result['eta'] ?? 0,
-      'error': result['error'] ?? '',
-    };
+    try {
+      final result = await _makeRequest('/job/status', {'jobid': int.parse(jobId)});
+      
+      final finished = result['finished'] == true;
+      final error = result['error']?.toString() ?? '';
+      final success = result['success'] == true;
+      
+      String state = 'RUNNING';
+      if (finished) {
+        state = success ? 'DONE' : 'ERROR';
+      }
+      
+      try {
+        final stats = await _makeRequest('/core/stats', {'group': 'job/$jobId'});
+        
+        // rclone stats return totalBytes and bytes. We calculate percent manually.
+        final bytes = stats['bytes'] ?? 0;
+        final totalBytes = stats['totalBytes'] ?? 0;
+        final percent = totalBytes > 0 ? (bytes / totalBytes) * 100.0 : 0.0;
+        
+        return {
+          'state': state,
+          'percent': percent,
+          'speed': stats['speed'] ?? 0,
+          'bytes': bytes,
+          'eta': stats['eta'] ?? 0,
+          'error': error.isEmpty ? (stats['lastError'] ?? '') : error,
+        };
+      } catch (e) {
+        return {
+          'state': state,
+          'percent': finished ? 100.0 : 0.0,
+          'speed': 0,
+          'bytes': 0,
+          'eta': 0,
+          'error': error,
+        };
+      }
+    } catch (e) {
+      if (e.toString().contains('job not found')) {
+        return {
+          'state': 'ERROR',
+          'percent': 0.0,
+          'speed': 0,
+          'bytes': 0,
+          'eta': 0,
+          'error': 'Job not found (may have failed immediately or expired)',
+        };
+      }
+      rethrow;
+    }
   }
   
   Future<List<Map<String, dynamic>>> listTransfers() async {

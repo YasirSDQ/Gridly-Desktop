@@ -31,7 +31,17 @@ class _TransferModalState extends State<TransferModal> {
     _sourceRemote = widget.sourceRemote;
     if (widget.preSelectedSource != null) {
       _selectedSourceItem = widget.preSelectedSource;
-      _sourcePath = _selectedSourceItem!.path; // Wait, actually path is full path. If it's a file, the path is its path.
+      if (_selectedSourceItem!.isDir) {
+        _sourcePath = _selectedSourceItem!.path;
+      } else {
+        final parts = _selectedSourceItem!.path.split('/');
+        if (parts.length > 1) {
+          parts.removeLast();
+          _sourcePath = parts.join('/');
+        } else {
+          _sourcePath = '';
+        }
+      }
     }
   }
 
@@ -144,16 +154,23 @@ class _TransferModalState extends State<TransferModal> {
                     child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
                   ),
                   const SizedBox(width: 16),
-                  ElevatedButton.icon(
+                  ElevatedButton(
                     onPressed: (_sourceRemote == null || _destRemote == null)
                         ? null
                         : () {
+                            String finalDstPath = _destPath;
+                            if (_selectedSourceItem != null && _selectedSourceItem!.isDir) {
+                              finalDstPath = _destPath.isEmpty 
+                                  ? _selectedSourceItem!.name 
+                                  : '$_destPath/${_selectedSourceItem!.name}';
+                            }
+                            
                             context.read<AppProvider>().startTransferAndPoll(
                               context.read<RCloneService>(),
                               srcRemote: _sourceRemote!,
                               srcPath: _sourcePath,
                               dstRemote: _destRemote!,
-                              dstPath: _destPath,
+                              dstPath: finalDstPath,
                               isCopy: _isCopy,
                               isFile: _selectedSourceItem != null ? !_selectedSourceItem!.isDir : false,
                               serverSide: _serverSide,
@@ -162,12 +179,18 @@ class _TransferModalState extends State<TransferModal> {
                             // Also switch to transfers tab to see it!
                             context.read<AppProvider>().switchTab('transfers');
                           },
-                    icon: const Icon(Icons.send, size: 18),
-                    label: const Text('Start Transfer'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF6366F1),
                       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                       disabledBackgroundColor: Colors.white.withOpacity(0.1),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.send, size: 18, color: Colors.white),
+                        SizedBox(width: 8),
+                        Text('Start Transfer', style: TextStyle(color: Colors.white)),
+                      ],
                     ),
                   ),
                 ],
@@ -264,7 +287,7 @@ class _TransferModalState extends State<TransferModal> {
                     if (item.isDir) {
                       onPathChanged(item.path, item);
                     } else {
-                      onPathChanged(item.path, item);
+                      onPathChanged(currentPath, item);
                     }
                   },
                   selectedPath: selectedItem?.path ?? currentPath,

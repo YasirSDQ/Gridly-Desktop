@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../models/models.dart';
 import '../services/rclone_service.dart';
 import 'transfer_modal.dart';
+import 'auth_modal.dart';
 
 class FileBrowser extends StatefulWidget {
   const FileBrowser({super.key});
@@ -16,7 +17,7 @@ class FileBrowser extends StatefulWidget {
 class _FileBrowserState extends State<FileBrowser> {
   final TextEditingController _searchController = TextEditingController();
   String _viewMode = 'grid'; // grid or list
-  
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -31,10 +32,10 @@ class _FileBrowserState extends State<FileBrowser> {
           children: [
             // Top bar with breadcrumbs and actions
             _buildTopBar(provider),
-            
+
             // Search and filter bar
             _buildFilterBar(provider),
-            
+
             // File grid/list
             Expanded(
               child: _buildFileList(provider),
@@ -72,7 +73,8 @@ class _FileBrowserState extends State<FileBrowser> {
                       final parts = provider.currentPath.split('/');
                       parts.removeLast();
                       final newPath = parts.join('/');
-                      provider.navigateTo(provider.currentRemote, newPath, rcloneService);
+                      provider.navigateTo(
+                          provider.currentRemote, newPath, rcloneService);
                     }
                   },
                   tooltip: 'Go Up',
@@ -84,9 +86,9 @@ class _FileBrowserState extends State<FileBrowser> {
                     child: Row(
                       children: [
                         Text(
-                          provider.currentRemote.isEmpty 
-                              ? 'Select a remote' 
-                              : '${provider.currentRemote}:${provider.currentPath}',
+                          provider.currentRemote.isEmpty
+                              ? 'Select a remote'
+                              : '${provider.currentRemote}${provider.isSharedWithMe ? " (Shared with me)" : ""}:${provider.currentPath}',
                           style: TextStyle(
                             color: Colors.white.withOpacity(0.9),
                             fontSize: 14,
@@ -97,12 +99,25 @@ class _FileBrowserState extends State<FileBrowser> {
                     ),
                   ),
                 ),
+                if (provider.currentRemote.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.refresh, size: 20),
+                    color: Colors.white.withOpacity(0.7),
+                    tooltip: 'Refresh',
+                    onPressed: () {
+                      final rcloneService = context.read<RCloneService>();
+                      provider.navigateTo(provider.currentRemote,
+                          provider.currentPath, rcloneService);
+                    },
+                  ),
+                ],
               ],
             ),
           ),
-          
+
           const SizedBox(width: 16),
-          
+
           // View mode toggle
           SegmentedButton<String>(
             segments: const [
@@ -125,9 +140,9 @@ class _FileBrowserState extends State<FileBrowser> {
               ),
             ),
           ),
-          
+
           const SizedBox(width: 16),
-          
+
           // Action buttons
           PopupMenuButton<String>(
             icon: Container(
@@ -237,37 +252,155 @@ class _FileBrowserState extends State<FileBrowser> {
   }
 
   Widget _buildFileList(AppProvider provider) {
+    // Re-auth state
+    if (provider.requiresReauth) {
+      return Center(
+        child: Container(
+          padding: const EdgeInsets.all(40),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B).withOpacity(0.4),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.red.withOpacity(0.2)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 20,
+                spreadRadius: -5,
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.red.withOpacity(0.2),
+                          Colors.orange.withOpacity(0.1),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Container(
+                    width: 70,
+                    height: 70,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: const LinearGradient(
+                        colors: [Colors.redAccent, Colors.orangeAccent],
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.red.withOpacity(0.3),
+                          blurRadius: 15,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.lock_clock,
+                      size: 32,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Session Expired',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Your authentication token has expired or is invalid.\nPlease re-authenticate to continue.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.5),
+                  fontSize: 14,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) => const AuthModal(),
+                  );
+                },
+                icon: const Icon(Icons.refresh, size: 18, color: Colors.white),
+                label: const Text('Re-authenticate', style: TextStyle(color: Colors.white)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.redAccent,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    
     // Error state
     if (provider.error != null && provider.currentRemote.isNotEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline, size: 52, color: Colors.red.withOpacity(0.5)),
+            Icon(Icons.error_outline,
+                size: 52, color: Colors.red.withOpacity(0.5)),
             const SizedBox(height: 16),
-            const Text('Could not load files', style: TextStyle(color: Colors.white70, fontSize: 16)),
+            const Text('Could not load files',
+                style: TextStyle(color: Colors.white70, fontSize: 16)),
             const SizedBox(height: 8),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 40),
               child: Text(provider.error!,
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white.withOpacity(0.35), fontSize: 12)),
+                  style: TextStyle(
+                      color: Colors.white.withOpacity(0.35), fontSize: 12)),
             ),
             const SizedBox(height: 16),
-            ElevatedButton.icon(
+            ElevatedButton(
               onPressed: () {
                 final rcloneService = context.read<RCloneService>();
-                provider.navigateTo(provider.currentRemote, provider.currentPath, rcloneService);
+                provider.navigateTo(provider.currentRemote,
+                    provider.currentPath, rcloneService);
               },
-              icon: const Icon(Icons.refresh, size: 16),
-              label: const Text('Retry'),
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6366F1)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6366F1),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.refresh, size: 16),
+                  SizedBox(width: 8),
+                  Text('Retry'),
+                ],
+              ),
             ),
           ],
         ),
       );
     }
-    if (provider.isLoading) {
+    if (provider.isLoading && provider.currentFiles.isEmpty) {
       return const Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -285,31 +418,85 @@ class _FileBrowserState extends State<FileBrowser> {
     // No remote selected
     if (provider.currentRemote.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [const Color(0xFF6366F1).withOpacity(0.2), const Color(0xFF8B5CF6).withOpacity(0.1)],
-                ),
-                borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.all(40),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B).withOpacity(0.4),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white.withOpacity(0.05)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 20,
+                spreadRadius: -5,
               ),
-              child: Icon(Icons.add_to_drive, size: 40, color: Colors.white.withOpacity(0.3)),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'No account connected',
-              style: TextStyle(color: Colors.white70, fontSize: 18, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Click "Add Account" to connect a cloud drive',
-              style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 14),
-            ),
-          ],
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [
+                          const Color(0xFF6366F1).withOpacity(0.2),
+                          const Color(0xFF8B5CF6).withOpacity(0.1),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Container(
+                    width: 70,
+                    height: 70,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF6366F1).withOpacity(0.3),
+                          blurRadius: 15,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.cloud_off,
+                      size: 32,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'No Account Connected',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Connect a cloud drive to start managing\nyour files in one unified interface.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.5),
+                  fontSize: 14,
+                  height: 1.5,
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -346,7 +533,7 @@ class _FileBrowserState extends State<FileBrowser> {
         ),
       );
     }
-    
+
     if (_viewMode == 'grid') {
       return GridView.builder(
         padding: const EdgeInsets.all(24),
@@ -376,7 +563,7 @@ class _FileBrowserState extends State<FileBrowser> {
 
   void _showNewFolderDialog(BuildContext context, AppProvider provider) {
     final nameController = TextEditingController();
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -442,7 +629,9 @@ class _FileCard extends StatelessWidget {
           if (file.isDir) {
             final rcloneService = context.read<RCloneService>();
             final provider = context.read<AppProvider>();
-            final newPath = provider.currentPath.isEmpty ? file.name : '${provider.currentPath}/${file.name}';
+            final newPath = provider.currentPath.isEmpty
+                ? file.name
+                : '${provider.currentPath}/${file.name}';
             provider.navigateTo(provider.currentRemote, newPath, rcloneService);
           }
         },
@@ -467,8 +656,14 @@ class _FileCard extends StatelessWidget {
                         height: 56,
                         decoration: BoxDecoration(
                           gradient: file.isDir
-                              ? const LinearGradient(colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)])
-                              : const LinearGradient(colors: [Color(0xFF3B82F6), Color(0xFF06B6D4)]),
+                              ? const LinearGradient(colors: [
+                                  Color(0xFF6366F1),
+                                  Color(0xFF8B5CF6)
+                                ])
+                              : const LinearGradient(colors: [
+                                  Color(0xFF3B82F6),
+                                  Color(0xFF06B6D4)
+                                ]),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(
@@ -500,18 +695,24 @@ class _FileCard extends StatelessWidget {
                           }
                         },
                         itemBuilder: (context) => [
-                          const PopupMenuItem(value: 'open', child: Text('Open')),
-                          const PopupMenuItem(value: 'download', child: Text('Download')),
-                          const PopupMenuItem(value: 'rename', child: Text('Rename')),
-                          const PopupMenuItem(value: 'move', child: Text('Move')),
-                          const PopupMenuItem(value: 'copy', child: Text('Copy')),
+                          const PopupMenuItem(
+                              value: 'open', child: Text('Open')),
+                          const PopupMenuItem(
+                              value: 'download', child: Text('Download')),
+                          const PopupMenuItem(
+                              value: 'rename', child: Text('Rename')),
+                          const PopupMenuItem(
+                              value: 'move', child: Text('Move')),
+                          const PopupMenuItem(
+                              value: 'copy', child: Text('Copy')),
                           const PopupMenuItem(
                             value: 'delete',
                             child: Row(
                               children: [
                                 Icon(Icons.delete, size: 18, color: Colors.red),
                                 SizedBox(width: 8),
-                                Text('Delete', style: TextStyle(color: Colors.red)),
+                                Text('Delete',
+                                    style: TextStyle(color: Colors.red)),
                               ],
                             ),
                           ),
@@ -521,7 +722,7 @@ class _FileCard extends StatelessWidget {
                   ],
                 ),
               ),
-              
+
               // File info
               Padding(
                 padding: const EdgeInsets.all(12),
@@ -565,7 +766,7 @@ class _FileListItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('MMM dd, yyyy HH:mm');
-    
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -598,9 +799,9 @@ class _FileListItem extends StatelessWidget {
               size: 22,
             ),
           ),
-          
+
           const SizedBox(width: 16),
-          
+
           // Name
           Expanded(
             flex: 3,
@@ -614,7 +815,7 @@ class _FileListItem extends StatelessWidget {
               ),
             ),
           ),
-          
+
           // Size
           Expanded(
             flex: 1,
@@ -626,7 +827,7 @@ class _FileListItem extends StatelessWidget {
               ),
             ),
           ),
-          
+
           // Type
           Expanded(
             flex: 1,
@@ -638,21 +839,19 @@ class _FileListItem extends StatelessWidget {
               ),
             ),
           ),
-          
+
           // Modified
           Expanded(
             flex: 2,
             child: Text(
-              file.modified != null 
-                  ? dateFormat.format(file.modified!) 
-                  : '--',
+              file.modified != null ? dateFormat.format(file.modified!) : '--',
               style: TextStyle(
                 color: Colors.white.withOpacity(0.5),
                 fontSize: 13,
               ),
             ),
           ),
-          
+
           // Actions
           PopupMenuButton<String>(
             icon: Icon(

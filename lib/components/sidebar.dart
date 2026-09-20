@@ -99,14 +99,29 @@ class Sidebar extends StatelessWidget {
                   if (provider.remotes.isNotEmpty) ...[
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-                      child: Text(
-                        'ACCOUNTS',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.35),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.2,
-                        ),
+                      child: Row(
+                        children: [
+                          Text(
+                            'ACCOUNTS',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.35),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                          if (provider.isLoading) ...[
+                            const SizedBox(width: 8),
+                            const SizedBox(
+                              width: 10,
+                              height: 10,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 1.5,
+                                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF6366F1)),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                     ...provider.remotes.map((remote) {
@@ -174,6 +189,20 @@ class Sidebar extends StatelessWidget {
                                     ],
                                   ),
                                 ),
+                                if (remote.isExpired)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    margin: const EdgeInsets.only(right: 6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: Colors.red.withOpacity(0.5)),
+                                    ),
+                                    child: const Text(
+                                      'Expired',
+                                      style: TextStyle(color: Colors.redAccent, fontSize: 8, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
                                 // Remove button
                                 InkWell(
                                   onTap: () => _confirmRemoveAccount(context, provider, remote.name),
@@ -212,12 +241,25 @@ class Sidebar extends StatelessWidget {
                         _NavItem(
                           icon: Icons.folder_open,
                           label: 'My Drive',
-                          isSelected: provider.currentTab == 'drive',
+                          isSelected: provider.currentTab == 'drive' && !provider.isSharedWithMe,
                           onTap: () {
                             provider.switchTab('drive');
                             if (provider.currentRemote.isNotEmpty) {
                               final rcloneService = context.read<RCloneService>();
-                              provider.navigateTo(provider.currentRemote, '', rcloneService);
+                              provider.navigateTo(provider.currentRemote, '', rcloneService, shared: false);
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 4),
+                        _NavItem(
+                          icon: Icons.people_alt_outlined,
+                          label: 'Shared with me',
+                          isSelected: provider.currentTab == 'drive' && provider.isSharedWithMe,
+                          onTap: () {
+                            provider.switchTab('drive');
+                            if (provider.currentRemote.isNotEmpty) {
+                              final rcloneService = context.read<RCloneService>();
+                              provider.navigateTo(provider.currentRemote, '', rcloneService, shared: true);
                             }
                           },
                         ),
