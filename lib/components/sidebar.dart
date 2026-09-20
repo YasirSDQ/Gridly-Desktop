@@ -256,8 +256,8 @@ class Sidebar extends StatelessWidget {
   String _formatBytes(int bytes) {
     if (bytes <= 0) return "0 B";
     const suffixes = ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
-    var i = (bytes > 0) ? (bytes.toDouble().abs().log() / 1024.toDouble().log()).floor() : 0;
-    return '${(bytes / (1024.0.pow(i))).toStringAsFixed(1)} ${suffixes[i]}';
+    var i = (bytes > 0) ? (log(bytes.toDouble().abs()) / log(1024)).floor() : 0;
+    return '${(bytes / (pow(1024.0, i))).toStringAsFixed(1)} ${suffixes[i]}';
   }
 }
 
