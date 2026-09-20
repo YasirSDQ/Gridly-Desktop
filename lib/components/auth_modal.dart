@@ -206,11 +206,13 @@ class _AuthModalState extends State<AuthModal> {
             ),
 
             // Content
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+            Flexible(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
                   // Remote Name
                   const Text('Remote Name (e.g., mydrive)', style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w500)),
                   const SizedBox(height: 8),
@@ -376,7 +378,9 @@ class _AuthModalState extends State<AuthModal> {
                 ],
               ),
             ),
-          ],
+          ),
+        ),
+      ],
         ),
       ),
     );
