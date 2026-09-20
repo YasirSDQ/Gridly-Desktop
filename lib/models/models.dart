@@ -186,10 +186,35 @@ class AppProvider extends ChangeNotifier {
     }
   }
   
-  void navigateTo(String remote, String path) {
+  Future<void> navigateTo(String remote, String path, dynamic rcloneService) async {
     _currentRemote = remote;
     _currentPath = path;
-    notifyListeners();
+    
+    setLoading(true);
+    try {
+      final files = await rcloneService.listFiles(remote, path);
+      _currentFiles = files.map<FileItem>((f) => FileItem(
+        name: f['name'] ?? '',
+        path: f['path'] ?? '',
+        size: f['size'] ?? 0,
+        mimeType: f['mimeType'] ?? '',
+        isDir: f['isDir'] ?? false,
+        modified: f['modified'] != null ? DateTime.tryParse(f['modified']) : null,
+      )).toList();
+      
+      // Sort: Folders first, then alphabetically
+      _currentFiles.sort((a, b) {
+        if (a.isDir && !b.isDir) return -1;
+        if (!a.isDir && b.isDir) return 1;
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      });
+      
+      setError(null);
+    } catch (e) {
+      setError(e.toString());
+    } finally {
+      setLoading(false);
+    }
   }
   
   void setLoading(bool loading) {

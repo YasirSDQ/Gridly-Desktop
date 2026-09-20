@@ -162,13 +162,19 @@ class Sidebar extends StatelessWidget {
                             const Icon(Icons.storage, size: 16, color: Color(0xFF8B5CF6)),
                             const SizedBox(width: 8),
                             Expanded(
-                              child: Text(
-                                activeAccount.name,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
+                              child: InkWell(
+                                onTap: () {
+                                  final rcloneService = context.read<RCloneService>();
+                                  provider.navigateTo(remote.name, '', rcloneService);
+                                },
+                                child: Text(
+                                  remote.name,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],
