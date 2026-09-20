@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -10,9 +11,9 @@ class Sidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 260,
+      width: 256, // w-64
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: Colors.white.withOpacity(0.05),
         border: Border(
           right: BorderSide(
             color: Colors.white.withOpacity(0.05),
@@ -20,315 +21,268 @@ class Sidebar extends StatelessWidget {
           ),
         ),
       ),
-      child: Column(
-        children: [
-          // Remote connections section
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Remotes',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.add, size: 18),
-                  color: const Color(0xFF6366F1),
-                  onPressed: () => _showAddRemoteDialog(context),
-                  tooltip: 'Add Remote',
-                ),
-              ],
-            ),
-          ),
-          
-          Expanded(
-            child: Consumer<AppProvider>(
-              builder: (context, provider, _) {
-                final remotes = provider.remotes;
-                
-                if (remotes.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.cloud_off,
-                          size: 48,
-                          color: Colors.white.withOpacity(0.2),
+      child: ClipRRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Column(
+            children: [
+              // Logo
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topRight,
+                          end: Alignment.bottomLeft,
+                          colors: [
+                            Color(0xFF8B5CF6), // purple
+                            Color(0xFF6366F1), // indigo
+                          ],
                         ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No remotes configured',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.4),
-                            fontSize: 13,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextButton(
-                          onPressed: () => _showAddRemoteDialog(context),
-                          child: const Text('Add Remote'),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.cloud, color: Colors.white, size: 16),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      'Gridly',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.5,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Add Account Button
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: InkWell(
+                  onTap: () => _showAddRemoteDialog(context),
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.white.withOpacity(0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
                         ),
                       ],
                     ),
-                  );
-                }
-                
-                return ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  itemCount: remotes.length,
-                  itemBuilder: (context, index) {
-                    final remote = remotes[index];
-                    final isSelected = provider.currentRemote == remote.name;
-                    
-                    return Container(
-                      margin: const EdgeInsets.symmetric(vertical: 2),
-                      decoration: BoxDecoration(
-                        gradient: isSelected
-                            ? const LinearGradient(
-                                colors: [
-                                  Color(0xFF6366F1),
-                                  Color(0xFF8B5CF6),
-                                ],
-                              )
-                            : null,
-                        borderRadius: BorderRadius.circular(8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.add, color: Colors.grey[900], size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Add Account',
+                          style: TextStyle(
+                            color: Colors.grey[900],
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Nav Items
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Column(
+                    children: [
+                      _NavItem(
+                        icon: Icons.add_to_drive,
+                        label: 'My Drive',
+                        isSelected: true,
+                        onTap: () {},
                       ),
-                      child: ListTile(
-                        leading: Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? Colors.white.withOpacity(0.2)
-                                : const Color(0xFF0F172A),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Icon(
-                            _getRemoteIcon(remote.type),
-                            color: isSelected
-                                ? Colors.white
-                                : const Color(0xFF6366F1),
-                            size: 20,
-                          ),
-                        ),
-                        title: Text(
-                          remote.name,
-                          style: TextStyle(
-                            color: isSelected
-                                ? Colors.white
-                                : Colors.white.withOpacity(0.9),
-                            fontWeight: isSelected
-                                ? FontWeight.w600
-                                : FontWeight.normal,
-                            fontSize: 14,
-                          ),
-                        ),
-                        subtitle: Text(
-                          remote.type,
-                          style: TextStyle(
-                            color: isSelected
-                                ? Colors.white.withOpacity(0.7)
-                                : Colors.white.withOpacity(0.4),
-                            fontSize: 11,
-                          ),
-                        ),
-                        selected: isSelected,
-                        selectedTileColor: Colors.transparent,
-                        onTap: () {
-                          provider.navigateTo(remote.name, '');
-                        },
-                        trailing: PopupMenuButton<String>(
-                          icon: Icon(
-                            Icons.more_vert,
-                            color: isSelected
-                                ? Colors.white.withOpacity(0.7)
-                                : Colors.white.withOpacity(0.3),
-                            size: 18,
-                          ),
-                          onSelected: (value) {
-                            if (value == 'delete') {
-                              _confirmDelete(context, remote);
-                            }
-                          },
-                          itemBuilder: (context) => [
-                            const PopupMenuItem(
-                              value: 'delete',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.delete, size: 18),
-                                  SizedBox(width: 8),
-                                  Text('Remove'),
-                                ],
+                      const SizedBox(height: 8),
+                      _NavItem(
+                        icon: Icons.people,
+                        label: 'Shared with me',
+                        isSelected: false,
+                        onTap: () {},
+                      ),
+                      const SizedBox(height: 8),
+                      _NavItem(
+                        icon: Icons.swap_horiz,
+                        label: 'Transfers',
+                        isSelected: false,
+                        onTap: () {},
+                      ),
+                      const SizedBox(height: 8),
+                      _NavItem(
+                        icon: Icons.settings,
+                        label: 'Settings',
+                        isSelected: false,
+                        onTap: () {},
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Storage Info for active remote
+              Consumer<AppProvider>(
+                builder: (context, provider, _) {
+                  final remotes = provider.remotes;
+                  if (remotes.isEmpty) return const SizedBox.shrink();
+                  
+                  final activeAccount = remotes.first; // just taking first for now
+
+                  return Container(
+                    margin: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.05),
+                      border: Border.all(color: Colors.white.withOpacity(0.1)),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.storage, size: 16, color: Color(0xFF8B5CF6)),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                activeAccount.name,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],
                         ),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-          
-          // Storage info
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(
-                  color: Colors.white.withOpacity(0.05),
-                  width: 1,
-                ),
+                        const SizedBox(height: 12),
+                        Container(
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(3),
+                            child: FractionallySizedBox(
+                              alignment: Alignment.centerLeft,
+                              widthFactor: 0.65, // Dummy value
+                              child: Container(
+                                decoration: const BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Color(0xFF6366F1),
+                                      Color(0xFF8B5CF6),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              '65% used',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.7),
+                                fontSize: 12,
+                              ),
+                            ),
+                            Text(
+                              '65 GB / 100 GB',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.5),
+                                fontSize: 10,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
-            ),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.storage, size: 16, color: Colors.white.withOpacity(0.5)),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Storage',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.7),
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                LinearProgressIndicator(
-                  value: 0.65,
-                  backgroundColor: const Color(0xFF0F172A),
-                  valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF6366F1)),
-                  minHeight: 4,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      '65 GB used',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.5),
-                        fontSize: 11,
-                      ),
-                    ),
-                    Text(
-                      '100 GB total',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.5),
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
-  }
-
-  IconData _getRemoteIcon(String type) {
-    switch (type.toLowerCase()) {
-      case 'drive':
-        return Icons.folder;
-      case 's3':
-        return Icons.cloud;
-      case 'dropbox':
-        return Icons.folder_open;
-      case 'onedrive':
-        return Icons.cloud_queue;
-      default:
-        return Icons.storage;
-    }
   }
 
   void _showAddRemoteDialog(BuildContext context) {
+    // Implement Add Account Modal similar to AuthModal.tsx
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        title: const Text(
-          'Add Remote Storage',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: const Text(
-          'Configure a new cloud storage connection using rclone.',
-          style: TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // Open rclone config wizard
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF6366F1),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: const Text('Configure'),
-          ),
-        ],
+      builder: (context) => const AlertDialog(
+        title: Text('Connect Google Drive'),
+        content: Text('Will implement AuthModal equivalent here.'),
       ),
     );
   }
+}
 
-  void _confirmDelete(BuildContext context, RemoteConfig remote) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        shape: RoundedRectangleBorder(
+class _NavItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _NavItem({
+    required this.icon,
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF6366F1).withOpacity(0.2) : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
         ),
-        title: const Text(
-          'Remove Remote?',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: Text(
-          'Are you sure you want to remove "${remote.name}"?',
-          style: const TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // Delete remote
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: isSelected ? const Color(0xFF8B5CF6) : Colors.white.withOpacity(0.6),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: TextStyle(
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                color: isSelected ? const Color(0xFFA5B4FC) : Colors.white.withOpacity(0.6),
               ),
             ),
-            child: const Text('Remove'),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
