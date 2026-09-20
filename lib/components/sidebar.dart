@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../models/models.dart';
 import '../services/rclone_service.dart';
+import 'auth_modal.dart';
 
 class Sidebar extends StatelessWidget {
   const Sidebar({super.key});
@@ -237,13 +238,9 @@ class Sidebar extends StatelessWidget {
   }
 
   void _showAddRemoteDialog(BuildContext context) {
-    // Implement Add Account Modal similar to AuthModal.tsx
     showDialog(
       context: context,
-      builder: (context) => const AlertDialog(
-        title: Text('Connect Google Drive'),
-        content: Text('Will implement AuthModal equivalent here.'),
-      ),
+      builder: (context) => const AuthModal(),
     );
   }
 }
