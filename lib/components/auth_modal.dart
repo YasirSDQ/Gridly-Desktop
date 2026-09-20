@@ -85,8 +85,8 @@ class _AuthModalState extends State<AuthModal> {
           // It might throw because rclone closes the connection immediately
         }
         
-        // If we don't get a response (modal doesn't close) in 3 seconds, reset the button
-        await Future.delayed(const Duration(seconds: 3));
+        // If we don't get a response (modal doesn't close) in 15 seconds, reset the button
+        await Future.delayed(const Duration(seconds: 15));
         if (mounted) {
           setState(() => _loadingSubmit = false);
           ScaffoldMessenger.of(context).showSnackBar(
