@@ -24,10 +24,10 @@ class _TransferPanelState extends State<TransferPanel> {
         
         return Container(
           decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
+            color: Colors.white.withOpacity(0.05),
             border: Border(
               left: BorderSide(
-                color: Colors.white.withOpacity(0.05),
+                color: Colors.white.withOpacity(0.1),
                 width: 1,
               ),
             ),
@@ -200,8 +200,11 @@ class _FilterChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected
-              ? const Color(0xFF6366F1)
-              : const Color(0xFF0F172A),
+              ? const Color(0xFF6366F1).withOpacity(0.3)
+              : Colors.white.withOpacity(0.05),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF6366F1) : Colors.transparent,
+          ),
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(
@@ -262,12 +265,12 @@ class _TransferCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
+        color: Colors.white.withOpacity(0.05),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isError
               ? Colors.red.withOpacity(0.3)
-              : Colors.white.withOpacity(0.05),
+              : Colors.white.withOpacity(0.1),
         ),
       ),
       child: Column(
