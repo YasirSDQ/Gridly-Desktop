@@ -214,19 +214,17 @@ class RCloneService {
     
     stdoutStream.listen((data) {
       output += data;
-      // Try to extract JSON token from output
-      final startIndex = output.indexOf('{');
-      final endIndex = output.lastIndexOf('}');
-      
-      if (startIndex != -1 && endIndex != -1 && endIndex > startIndex) {
-        final maybeJson = output.substring(startIndex, endIndex + 1);
+      // Extract JSON token using regex
+      final match = RegExp(r'\{.*"access_token".*\}', dotAll: true).firstMatch(output);
+      if (match != null) {
+        final maybeJson = match.group(0)!;
         try {
           // Verify it's valid JSON before triggering callback
           jsonDecode(maybeJson);
           onTokenReceived(maybeJson);
           output = ''; // Clear to prevent multiple calls
         } catch (_) {
-          // Not valid JSON yet, wait for more data
+          // Not valid JSON yet
         }
       }
     });
