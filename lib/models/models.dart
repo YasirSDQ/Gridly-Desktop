@@ -126,6 +126,29 @@ class TransferJob {
     );
   }
 
+  TransferJob copyWith({
+    String? state,
+    double? percent,
+    int? speed,
+    int? bytes,
+    int? eta,
+    String? error,
+  }) {
+    return TransferJob(
+      id: id,
+      method: method,
+      source: source,
+      destination: destination,
+      state: state ?? this.state,
+      percent: percent ?? this.percent,
+      speed: speed ?? this.speed,
+      bytes: bytes ?? this.bytes,
+      eta: eta ?? this.eta,
+      error: error ?? this.error,
+      startTime: startTime,
+    );
+  }
+
   String get formattedSpeed {
     const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
     int unitIndex = 0;
@@ -278,7 +301,70 @@ class AppProvider extends ChangeNotifier {
   void updateTransfer(String id, Map<String, dynamic> updates) {
     final index = _activeTransfers.indexWhere((t) => t.id == id);
     if (index != -1) {
+      final old = _activeTransfers[index];
+      _activeTransfers[index] = old.copyWith(
+        state: updates['state'],
+        percent: updates['percent']?.toDouble(),
+        speed: updates['speed'],
+        bytes: updates['bytes'],
+        eta: updates['eta'],
+        error: updates['error'],
+      );
       notifyListeners();
+    }
+  }
+
+  Future<void> startTransferAndPoll(dynamic rcloneService, {
+    required String srcRemote,
+    required String srcPath,
+    required String dstRemote,
+    required String dstPath,
+    required bool isCopy,
+    required bool isFile,
+    required bool serverSide,
+  }) async {
+    try {
+      final jobId = await rcloneService.startTransfer(
+        srcFs: srcRemote,
+        srcRemote: srcPath,
+        dstFs: dstRemote,
+        dstRemote: dstPath,
+        isCopy: isCopy,
+        isFile: isFile,
+      );
+
+      final job = TransferJob(
+        id: jobId,
+        method: isCopy ? 'Copy' : 'Move',
+        source: '$srcRemote:$srcPath',
+        destination: '$dstRemote:$dstPath',
+        state: 'RUNNING',
+        startTime: DateTime.now(),
+      );
+      addTransfer(job);
+
+      _pollTransfer(jobId, rcloneService);
+    } catch (e) {
+      print('Transfer failed to start: $e');
+    }
+  }
+
+  void _pollTransfer(String jobId, dynamic rcloneService) async {
+    bool isDone = false;
+    while (!isDone) {
+      await Future.delayed(const Duration(seconds: 1));
+      try {
+        final status = await rcloneService.getTransferStatus(jobId);
+        updateTransfer(jobId, status);
+        
+        if (status['state'] == 'DONE' || status['state'] == 'ERROR' || status['percent'] >= 100) {
+          isDone = true;
+        }
+      } catch (e) {
+        print('Polling error: $e');
+        updateTransfer(jobId, {'state': 'ERROR', 'error': e.toString()});
+        isDone = true;
+      }
     }
   }
   

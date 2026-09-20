@@ -148,8 +148,19 @@ class _TransferModalState extends State<TransferModal> {
                     onPressed: (_sourceRemote == null || _destRemote == null)
                         ? null
                         : () {
-                            // TODO: Dispatch transfer job
+                            context.read<AppProvider>().startTransferAndPoll(
+                              context.read<RCloneService>(),
+                              srcRemote: _sourceRemote!,
+                              srcPath: _sourcePath,
+                              dstRemote: _destRemote!,
+                              dstPath: _destPath,
+                              isCopy: _isCopy,
+                              isFile: _selectedSourceItem != null ? !_selectedSourceItem!.isDir : false,
+                              serverSide: _serverSide,
+                            );
                             Navigator.pop(context);
+                            // Also switch to transfers tab to see it!
+                            context.read<AppProvider>().switchTab('transfers');
                           },
                     icon: const Icon(Icons.send, size: 18),
                     label: const Text('Start Transfer'),

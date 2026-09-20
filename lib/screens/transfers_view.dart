@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
 import '../models/models.dart';
+import '../components/transfer_modal.dart';
 
 class TransfersView extends StatefulWidget {
   const TransfersView({super.key});
@@ -46,7 +47,10 @@ class _TransfersViewState extends State<TransfersView> {
                   // New Transfer Button
                   ElevatedButton.icon(
                     onPressed: () {
-                      // TODO: Open generic transfer modal
+                      showDialog(
+                        context: context,
+                        builder: (context) => const TransferModal(),
+                      );
                     },
                     icon: const Icon(Icons.add, size: 18),
                     label: const Text('New Transfer'),
