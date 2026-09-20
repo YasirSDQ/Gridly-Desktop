@@ -25,6 +25,8 @@ class _AuthModalState extends State<AuthModal> {
   bool _loadingSubmit = false;
   String? _authUrl; // the URL to show the user
 
+  String? _statusMessage;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -66,33 +68,41 @@ class _AuthModalState extends State<AuthModal> {
     setState(() {
       _loadingCode = true;
       _authUrl = null;
+      _statusMessage = 'Starting rclone authorize...';
     });
 
     try {
       await _rcloneService.generateDriveLoginCode(
         (url) async {
-          // URL received — show it and open browser
           if (mounted) {
             setState(() {
               _authUrl = url;
               _loadingCode = false;
+              _statusMessage = null;
             });
           }
           await _openUrl(url);
         },
         (token) {
-          // Token received automatically after browser auth
           _createConfigWithToken(token);
         },
       );
 
-      // Safety timeout: reset button after 60s if URL never received
-      await Future.delayed(const Duration(seconds: 60));
+      // 30-second safety timeout — resets if URL never arrives
+      for (int i = 0; i < 30; i++) {
+        await Future.delayed(const Duration(seconds: 1));
+        if (!mounted || !_loadingCode) return;
+        if (mounted) setState(() => _statusMessage = 'Waiting for rclone URL... (${30 - i}s)');
+      }
+
       if (mounted && _loadingCode) {
-        setState(() => _loadingCode = false);
+        setState(() {
+          _loadingCode = false;
+          _statusMessage = null;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Auth timed out. Please try again.'),
+            content: Text('Timed out. Make sure rclone is installed and try again.'),
             backgroundColor: Colors.orange,
           ),
         );
@@ -102,7 +112,7 @@ class _AuthModalState extends State<AuthModal> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
-        setState(() => _loadingCode = false);
+        setState(() { _loadingCode = false; _statusMessage = null; });
       }
     }
   }

@@ -202,59 +202,64 @@ class RCloneService {
 
   Process? _authorizeProcess;
   bool _urlAlreadySent = false;
-  
-  Future<void> generateDriveLoginCode(void Function(String url) onUrlReceived, void Function(String token) onTokenReceived) async {
+  void Function(String)? _onTokenCallback;
+
+  Future<void> generateDriveLoginCode(
+    void Function(String url) onUrlReceived,
+    void Function(String token) onTokenReceived,
+  ) async {
     if (_rclonePath == null) throw Exception('RClone not installed');
-    
+
     _authorizeProcess?.kill();
     _urlAlreadySent = false;
+    _onTokenCallback = onTokenReceived;
+
     _authorizeProcess = await Process.start(
       _rclonePath!,
-      ['authorize', 'drive', '--auth-no-open-browser'],
-      runInShell: true,
+      ['authorize', 'drive'],
+      runInShell: false, // direct pipe, not through cmd.exe shell buffering
     );
-    
+
     final stdoutStream = _authorizeProcess!.stdout.transform(utf8.decoder);
     final stderrStream = _authorizeProcess!.stderr.transform(utf8.decoder);
-    
-    // Accumulate both streams to handle chunked output
-    String stderrAcc = '';
-    String stdoutAcc = '';
-    final urlRegex = RegExp(r'http://127\.0\.0\.1:\d+/auth\?[^\s]+');
-    final tokenRegex = RegExp(r'\{[^{}]*"access_token"[^{}]*\}', dotAll: true);
-    
-    void tryExtractUrl(String data) {
-      if (_urlAlreadySent) return;
-      final match = urlRegex.firstMatch(data);
-      if (match != null) {
-        _urlAlreadySent = true;
-        onUrlReceived(match.group(0)!);
+
+    String accumulated = '';
+
+    // Match the auth URL on any port (rclone may use different ports)
+    final urlRegex = RegExp(r'http://127\.0\.0\.1:\d+/auth[?\w%=&+._-]*');
+    // Match full JSON token block
+    final tokenStartRegex = RegExp(r'Paste the following');
+    final tokenJsonRegex = RegExp(r'\{[^{}]*"access_token"[^{}]*\}', dotAll: true);
+
+    void processChunk(String chunk) {
+      accumulated += chunk;
+
+      // Extract URL
+      if (!_urlAlreadySent) {
+        final urlMatch = urlRegex.firstMatch(accumulated);
+        if (urlMatch != null) {
+          _urlAlreadySent = true;
+          onUrlReceived(urlMatch.group(0)!);
+        }
+      }
+
+      // Extract token JSON
+      if (tokenStartRegex.hasMatch(accumulated) || accumulated.contains('access_token')) {
+        final tokenMatch = tokenJsonRegex.firstMatch(accumulated);
+        if (tokenMatch != null) {
+          final maybeJson = tokenMatch.group(0)!;
+          try {
+            jsonDecode(maybeJson); // validate
+            _onTokenCallback?.call(maybeJson);
+            _onTokenCallback = null;
+            accumulated = '';
+          } catch (_) {}
+        }
       }
     }
-    
-    void tryExtractToken(String data) {
-      final match = tokenRegex.firstMatch(data);
-      if (match != null) {
-        final maybeJson = match.group(0)!;
-        try {
-          jsonDecode(maybeJson);
-          onTokenReceived(maybeJson);
-          stdoutAcc = '';
-        } catch (_) {}
-      }
-    }
-    
-    stderrStream.listen((data) {
-      stderrAcc += data;
-      tryExtractUrl(stderrAcc);
-      tryExtractToken(stderrAcc); // some builds print token to stderr too
-    });
-    
-    stdoutStream.listen((data) {
-      stdoutAcc += data;
-      tryExtractUrl(stdoutAcc);
-      tryExtractToken(stdoutAcc);
-    });
+
+    stderrStream.listen(processChunk);
+    stdoutStream.listen(processChunk);
   }
   
   void cancelAuthorize() {
@@ -262,14 +267,15 @@ class RCloneService {
     _authorizeProcess = null;
   }
   
-  // File operations — correct RC endpoint is /operations/list
+  // File operations
   Future<List<Map<String, dynamic>>> listFiles(String remote, String path) async {
+    // /operations/list is the correct RC endpoint (not listfiles)
+    // Keep params simple — don't nest under 'opt'
     final result = await _makeRequest('/operations/list', {
       'fs': '$remote:',
       'remote': path,
-      'opt': {'recurse': false, 'showHidden': false, 'noModTime': false},
     });
-    
+
     final files = result['list'] as List? ?? [];
     return files.map<Map<String, dynamic>>((f) {
       return {
