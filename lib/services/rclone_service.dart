@@ -201,12 +201,11 @@ class RCloneService {
   }
 
   // Create config via RC API so the running daemon picks it up immediately
-  // Parameters must be flat (rclone RC API format)
   Future<void> createConfigViaApi(String name, String type, Map<String, String> params) async {
     final Map<String, dynamic> body = {
       'name': name,
       'type': type,
-      ...params,  // flat, not nested
+      'parameters': params,
     };
     await _makeRequest('/config/create', body);
   }
@@ -234,7 +233,7 @@ class RCloneService {
     print('[AUTH] Starting rclone authorize at: $_rclonePath');
     _authorizeProcess = await Process.start(
       _rclonePath!,
-      ['authorize', 'drive'],
+      ['authorize', 'drive', '--auth-no-open-browser'],
       runInShell: true,
     );
 
