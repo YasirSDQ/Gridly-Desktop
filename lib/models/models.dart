@@ -3,11 +3,15 @@ import 'package:flutter/foundation.dart';
 class RemoteConfig {
   final String name;
   final String type;
+  final int totalBytes;
+  final int usedBytes;
   final Map<String, dynamic> options;
 
   RemoteConfig({
     required this.name,
     required this.type,
+    this.totalBytes = 0,
+    this.usedBytes = 0,
     this.options = const {},
   });
 
@@ -174,11 +178,28 @@ class AppProvider extends ChangeNotifier {
     setLoading(true);
     try {
       final configs = await rcloneService.listConfigs();
-      _remotes = configs.map((c) => RemoteConfig(
-        name: c['name'], 
-        type: c['type'] ?? 'unknown',
-      )).toList();
-      setError(null);
+      final List<RemoteConfig> newRemotes = [];
+      
+      for (final c in configs) {
+        final name = c['name'];
+        final type = c['type'] ?? 'unknown';
+        final about = await rcloneService.getAbout(name);
+        
+        newRemotes.add(RemoteConfig(
+          name: name,
+          type: type,
+          totalBytes: about['total'] ?? 0,
+          usedBytes: about['used'] ?? 0,
+        ));
+      }
+      _remotes = newRemotes;
+      
+      if (_remotes.isNotEmpty) {
+        // Automatically navigate to the first remote
+        await navigateTo(_remotes.first.name, '', rcloneService);
+      } else {
+        setError(null);
+      }
     } catch (e) {
       setError(e.toString());
     } finally {
