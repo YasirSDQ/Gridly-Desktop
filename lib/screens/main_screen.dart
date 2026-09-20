@@ -8,6 +8,8 @@ import '../components/sidebar.dart';
 import '../components/file_browser.dart';
 import '../components/transfer_panel.dart';
 import '../components/custom_title_bar.dart';
+import 'transfers_view.dart';
+import 'settings_view.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -85,13 +87,9 @@ class _MainScreenState extends State<MainScreen> {
                           child: Consumer<AppProvider>(
                             builder: (context, provider, child) {
                               if (provider.currentTab == 'transfers') {
-                                return const Center(
-                                  child: Text('Transfers View', style: TextStyle(color: Colors.white, fontSize: 18)),
-                                );
+                                return const TransfersView();
                               } else if (provider.currentTab == 'settings') {
-                                return const Center(
-                                  child: Text('Settings View', style: TextStyle(color: Colors.white, fontSize: 18)),
-                                );
+                                return const SettingsView();
                               }
                               return const FileBrowser();
                             },
