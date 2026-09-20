@@ -492,9 +492,10 @@ class _TransferModalState extends State<TransferModal> {
   Widget _buildOptionsStep() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           Text('SERVER-TO-SERVER OPERATION', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
           const SizedBox(height: 12),
           Row(
@@ -625,7 +626,7 @@ class _TransferModalState extends State<TransferModal> {
               ),
             ),
           ),
-          const Spacer(),
+          const SizedBox(height: 24),
           // Summary
           Container(
             padding: const EdgeInsets.all(16),
@@ -712,6 +713,7 @@ class _TransferModalState extends State<TransferModal> {
             ),
           ),
         ],
+      ),
       ),
     );
   }
