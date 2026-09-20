@@ -82,7 +82,20 @@ class _MainScreenState extends State<MainScreen> {
                       Expanded(
                         child: Container(
                           decoration: const BoxDecoration(),
-                          child: const FileBrowser(),
+                          child: Consumer<AppProvider>(
+                            builder: (context, provider, child) {
+                              if (provider.currentTab == 'transfers') {
+                                return const Center(
+                                  child: Text('Transfers View', style: TextStyle(color: Colors.white, fontSize: 18)),
+                                );
+                              } else if (provider.currentTab == 'settings') {
+                                return const Center(
+                                  child: Text('Settings View', style: TextStyle(color: Colors.white, fontSize: 18)),
+                                );
+                              }
+                              return const FileBrowser();
+                            },
+                          ),
                         ),
                       ),
                       AnimatedContainer(
