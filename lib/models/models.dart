@@ -163,6 +163,7 @@ class AppProvider extends ChangeNotifier {
   
   String _currentRemote = '';
   String _currentPath = '';
+  String _currentTab = 'drive'; // 'drive', 'transfers', 'settings'
   bool _isLoading = false;
   String? _error;
   
@@ -171,11 +172,19 @@ class AppProvider extends ChangeNotifier {
   List<TransferJob> get activeTransfers => _activeTransfers;
   String get currentRemote => _currentRemote;
   String get currentPath => _currentPath;
+  String get currentTab => _currentTab;
   int get fileCount => _currentFiles.where((f) => !f.isDir).length;
   int get folderCount => _currentFiles.where((f) => f.isDir).length;
   
   bool get isLoading => _isLoading;
   String? get error => _error;
+
+  void switchTab(String tab) {
+    if (_currentTab != tab) {
+      _currentTab = tab;
+      notifyListeners();
+    }
+  }
   
   Future<void> loadRemotes(dynamic rcloneService) async {
     setLoading(true);

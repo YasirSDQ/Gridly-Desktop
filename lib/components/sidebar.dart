@@ -212,8 +212,9 @@ class Sidebar extends StatelessWidget {
                         _NavItem(
                           icon: Icons.folder_open,
                           label: 'My Drive',
-                          isSelected: true,
+                          isSelected: provider.currentTab == 'drive',
                           onTap: () {
+                            provider.switchTab('drive');
                             if (provider.currentRemote.isNotEmpty) {
                               final rcloneService = context.read<RCloneService>();
                               provider.navigateTo(provider.currentRemote, '', rcloneService);
@@ -224,15 +225,19 @@ class Sidebar extends StatelessWidget {
                         _NavItem(
                           icon: Icons.swap_horiz,
                           label: 'Transfers',
-                          isSelected: false,
-                          onTap: () {},
+                          isSelected: provider.currentTab == 'transfers',
+                          onTap: () {
+                            provider.switchTab('transfers');
+                          },
                         ),
                         const SizedBox(height: 4),
                         _NavItem(
                           icon: Icons.settings,
                           label: 'Settings',
-                          isSelected: false,
-                          onTap: () {},
+                          isSelected: provider.currentTab == 'settings',
+                          onTap: () {
+                            provider.switchTab('settings');
+                          },
                         ),
                       ],
                     ),
