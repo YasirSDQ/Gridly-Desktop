@@ -1,4 +1,4 @@
-﻿import 'dart:ui';
+import 'dart:ui';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -219,14 +219,14 @@ class Sidebar extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              totalBytes > 0 ? '\% used' : 'Unknown',
+                              totalBytes > 0 ? '${pctString}% used' : 'Unknown',
                               style: TextStyle(
                                 color: Colors.white.withOpacity(0.7),
                                 fontSize: 12,
                               ),
                             ),
                             Text(
-                              totalBytes > 0 ? '$(_formatBytes(activeAccount.usedBytes)) / $(_formatBytes(activeAccount.totalBytes))' : '',
+                              totalBytes > 0 ? '${_formatBytes(activeAccount.usedBytes)} / ${_formatBytes(activeAccount.totalBytes)}' : '',
                               style: TextStyle(
                                 color: Colors.white.withOpacity(0.5),
                                 fontSize: 10,
@@ -257,7 +257,7 @@ class Sidebar extends StatelessWidget {
     if (bytes <= 0) return "0 B";
     const suffixes = ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
     var i = (bytes > 0) ? (log(bytes.toDouble().abs()) / log(1024)).floor() : 0;
-    return '$((bytes / (pow(1024.0, i))).toStringAsFixed(1)) ${suffixes[i]}';
+    return '${(bytes / (pow(1024.0, i))).toStringAsFixed(1)} ${suffixes[i]}';
   }
 }
 
