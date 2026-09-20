@@ -207,9 +207,20 @@ class RCloneService {
     
     stdoutStream.listen((data) {
       output += data;
-      // If we see a JSON token in stdout
-      if (output.trim().startsWith('{') && output.trim().endsWith('}')) {
-        onTokenReceived(output.trim());
+      // Try to extract JSON token from output
+      final startIndex = output.indexOf('{');
+      final endIndex = output.lastIndexOf('}');
+      
+      if (startIndex != -1 && endIndex != -1 && endIndex > startIndex) {
+        final maybeJson = output.substring(startIndex, endIndex + 1);
+        try {
+          // Verify it's valid JSON before triggering callback
+          jsonDecode(maybeJson);
+          onTokenReceived(maybeJson);
+          output = ''; // Clear to prevent multiple calls
+        } catch (_) {
+          // Not valid JSON yet, wait for more data
+        }
       }
     });
   }
