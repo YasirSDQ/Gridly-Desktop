@@ -175,71 +175,85 @@ class RCloneService {
       configArgs.add(entry.value);
     }
     
-    configArgs.add('done');
-    
     if (_rclonePath != null) {
       await Process.run(_rclonePath!, configArgs, runInShell: true);
+      // Reload the config into the running daemon
+      try { await _makeRequest('/config/reload'); } catch (_) {}
     }
   }
   
   Future<void> deleteConfig(String name) async {
     if (_rclonePath != null) {
       await Process.run(_rclonePath!, ['config', 'delete', name], runInShell: true);
-      // Also reload config in daemon
       try { await _makeRequest('/config/reload'); } catch (_) {}
     }
   }
 
   // Create config via RC API so the running daemon picks it up immediately
+  // Parameters must be flat (rclone RC API format)
   Future<void> createConfigViaApi(String name, String type, Map<String, String> params) async {
     final Map<String, dynamic> body = {
       'name': name,
       'type': type,
-      'parameters': params,
+      ...params,  // flat, not nested
     };
     await _makeRequest('/config/create', body);
   }
 
   Process? _authorizeProcess;
+  bool _urlAlreadySent = false;
   
   Future<void> generateDriveLoginCode(void Function(String url) onUrlReceived, void Function(String token) onTokenReceived) async {
     if (_rclonePath == null) throw Exception('RClone not installed');
     
     _authorizeProcess?.kill();
+    _urlAlreadySent = false;
     _authorizeProcess = await Process.start(
       _rclonePath!,
-      ['authorize', 'drive'],
+      ['authorize', 'drive', '--auth-no-open-browser'],
       runInShell: true,
     );
     
     final stdoutStream = _authorizeProcess!.stdout.transform(utf8.decoder);
     final stderrStream = _authorizeProcess!.stderr.transform(utf8.decoder);
     
-    String output = '';
+    // Accumulate both streams to handle chunked output
+    String stderrAcc = '';
+    String stdoutAcc = '';
+    final urlRegex = RegExp(r'http://127\.0\.0\.1:\d+/auth\?[^\s]+');
+    final tokenRegex = RegExp(r'\{[^{}]*"access_token"[^{}]*\}', dotAll: true);
     
-    stderrStream.listen((data) {
-      // rclone authorize drive prints the URL to stderr usually
-      final urlMatch = RegExp(r'(http://127\.0\.0\.1:53682/auth\?state=[^\s]+)').firstMatch(data);
-      if (urlMatch != null) {
-        onUrlReceived(urlMatch.group(1)!);
+    void tryExtractUrl(String data) {
+      if (_urlAlreadySent) return;
+      final match = urlRegex.firstMatch(data);
+      if (match != null) {
+        _urlAlreadySent = true;
+        onUrlReceived(match.group(0)!);
       }
-    });
+    }
     
-    stdoutStream.listen((data) {
-      output += data;
-      // Extract JSON token using regex
-      final match = RegExp(r'\{.*"access_token".*\}', dotAll: true).firstMatch(output);
+    void tryExtractToken(String data) {
+      final match = tokenRegex.firstMatch(data);
       if (match != null) {
         final maybeJson = match.group(0)!;
         try {
-          // Verify it's valid JSON before triggering callback
           jsonDecode(maybeJson);
           onTokenReceived(maybeJson);
-          output = ''; // Clear to prevent multiple calls
-        } catch (_) {
-          // Not valid JSON yet
-        }
+          stdoutAcc = '';
+        } catch (_) {}
       }
+    }
+    
+    stderrStream.listen((data) {
+      stderrAcc += data;
+      tryExtractUrl(stderrAcc);
+      tryExtractToken(stderrAcc); // some builds print token to stderr too
+    });
+    
+    stdoutStream.listen((data) {
+      stdoutAcc += data;
+      tryExtractUrl(stdoutAcc);
+      tryExtractToken(stdoutAcc);
     });
   }
   
@@ -248,21 +262,20 @@ class RCloneService {
     _authorizeProcess = null;
   }
   
-  // File operations
+  // File operations — correct RC endpoint is /operations/list
   Future<List<Map<String, dynamic>>> listFiles(String remote, String path) async {
-    final result = await _makeRequest('/operations/listfiles', {
+    final result = await _makeRequest('/operations/list', {
       'fs': '$remote:',
       'remote': path,
-      'recurse': false,
-      'showHidden': true,
+      'opt': {'recurse': false, 'showHidden': false, 'noModTime': false},
     });
     
     final files = result['list'] as List? ?? [];
-    return files.map((f) {
+    return files.map<Map<String, dynamic>>((f) {
       return {
         'name': f['Name'] ?? '',
         'path': f['Path'] ?? '',
-        'size': f['Size'] ?? 0,
+        'size': (f['Size'] is int) ? f['Size'] : 0,
         'mimeType': f['MimeType'] ?? '',
         'isDir': f['IsDir'] ?? false,
         'modified': f['ModTime'] ?? '',
