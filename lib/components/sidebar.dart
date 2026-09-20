@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -145,8 +146,16 @@ class Sidebar extends StatelessWidget {
                   final remotes = provider.remotes;
                   if (remotes.isEmpty) return const SizedBox.shrink();
                   
-                  final activeAccount = remotes.first; // just taking first for now
-
+                  final activeAccount = remotes.firstWhere(
+                    (r) => r.name == provider.currentRemote,
+                    orElse: () => remotes.first,
+                  );
+                  
+                  final usedBytes = activeAccount.usedBytes.toDouble();
+                  final totalBytes = activeAccount.totalBytes.toDouble();
+                  final pct = totalBytes > 0 ? (usedBytes / totalBytes).clamp(0.0, 1.0) : 0.0;
+                  final pctString = (pct * 100).toStringAsFixed(1);
+                  
                   return Container(
                     margin: const EdgeInsets.all(16),
                     padding: const EdgeInsets.all(16),
@@ -191,7 +200,7 @@ class Sidebar extends StatelessWidget {
                             borderRadius: BorderRadius.circular(3),
                             child: FractionallySizedBox(
                               alignment: Alignment.centerLeft,
-                              widthFactor: 0.65, // Dummy value
+                              widthFactor: pct,
                               child: Container(
                                 decoration: const BoxDecoration(
                                   gradient: LinearGradient(
@@ -210,14 +219,14 @@ class Sidebar extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              '65% used',
+                              totalBytes > 0 ? '$pctString% used' : 'Unknown',
                               style: TextStyle(
                                 color: Colors.white.withOpacity(0.7),
                                 fontSize: 12,
                               ),
                             ),
                             Text(
-                              '65 GB / 100 GB',
+                              totalBytes > 0 ? '${_formatBytes(activeAccount.usedBytes)} / ${_formatBytes(activeAccount.totalBytes)}' : '',
                               style: TextStyle(
                                 color: Colors.white.withOpacity(0.5),
                                 fontSize: 10,
@@ -242,6 +251,13 @@ class Sidebar extends StatelessWidget {
       context: context,
       builder: (context) => const AuthModal(),
     );
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes <= 0) return "0 B";
+    const suffixes = ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
+    var i = (bytes > 0) ? (bytes.toDouble().abs().log() / 1024.toDouble().log()).floor() : 0;
+    return '${(bytes / (1024.0.pow(i))).toStringAsFixed(1)} ${suffixes[i]}';
   }
 }
 

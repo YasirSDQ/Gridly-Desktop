@@ -171,6 +171,9 @@ class AppProvider extends ChangeNotifier {
   List<TransferJob> get activeTransfers => _activeTransfers;
   String get currentRemote => _currentRemote;
   String get currentPath => _currentPath;
+  int get fileCount => _currentFiles.where((f) => !f.isDir).length;
+  int get folderCount => _currentFiles.where((f) => f.isDir).length;
+  
   bool get isLoading => _isLoading;
   String? get error => _error;
   
