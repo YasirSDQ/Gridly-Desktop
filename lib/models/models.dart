@@ -170,9 +170,20 @@ class AppProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   
-  Future<void> loadRemotes() async {
-    // Will be implemented with service
-    notifyListeners();
+  Future<void> loadRemotes(dynamic rcloneService) async {
+    setLoading(true);
+    try {
+      final configs = await rcloneService.listConfigs();
+      _remotes = configs.map((c) => RemoteConfig(
+        name: c['name'], 
+        type: c['type'] ?? 'unknown',
+      )).toList();
+      setError(null);
+    } catch (e) {
+      setError(e.toString());
+    } finally {
+      setLoading(false);
+    }
   }
   
   void navigateTo(String remote, String path) {
