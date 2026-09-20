@@ -17,102 +17,110 @@ class CustomTitleBar extends StatelessWidget {
           ),
         ),
       ),
-      child: Row(
-        children: [
-          // App icon and title - matching webapp design
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF6366F1), Color(0xFF8B5CF6), Color(0xFF06B6D4)],
-                    ),
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF6366F1).withOpacity(0.3),
-                        blurRadius: 10,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.cloud,
-                    size: 18,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+      child: WindowTitleBarBox(
+        child: Row(
+          children: [
+            Expanded(
+              child: MoveWindow(
+                child: Row(
                   children: [
-                    Text(
-                      'Gridly',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: -0.5,
+                    // App icon and title - matching webapp design
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF6366F1), Color(0xFF8B5CF6), Color(0xFF06B6D4)],
+                              ),
+                              borderRadius: BorderRadius.circular(10),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF6366F1).withOpacity(0.3),
+                                  blurRadius: 10,
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.cloud,
+                              size: 18,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          const Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Gridly',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: -0.5,
+                                ),
+                              ),
+                              Text(
+                                'ADVANCED DRIVE MANAGER',
+                                style: TextStyle(
+                                  color: Colors.white38,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w500,
+                                  letterSpacing: 1,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
-                    Text(
-                      'ADVANCED DRIVE MANAGER',
-                      style: TextStyle(
-                        color: Colors.white38,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: 1,
+                    
+                    const Spacer(),
+                    
+                    // Connection status indicator (like webapp)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 16),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: Colors.green,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.green.withOpacity(0.5),
+                                  blurRadius: 6,
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          const Text(
+                            'Connected to rclone',
+                            style: TextStyle(
+                              color: Colors.green,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
-          ),
-          
-          const Spacer(),
-          
-          // Connection status indicator (like webapp)
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: Row(
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: Colors.green,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.green.withOpacity(0.5),
-                        blurRadius: 6,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 6),
-                const Text(
-                  'Connected to rclone',
-                  style: TextStyle(
-                    color: Colors.green,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          
-          // Window controls
-          WindowTitleBarBox(
-            child: Row(
+            
+            // Window controls
+            Row(
               children: [
                 _WindowButton(
                   icon: Icons.remove,
@@ -129,8 +137,8 @@ class CustomTitleBar extends StatelessWidget {
                 ),
               ],
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
